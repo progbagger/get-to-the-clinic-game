@@ -138,8 +138,6 @@ class Enemy(Entity):
         pass
 
     def attack(self, *, enemy: "Enemy", amount: int = 1) -> None:
-        """Ударяет соперника"""
-
         enemy.take_hit(amount)
 
 
