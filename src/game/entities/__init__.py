@@ -3,6 +3,7 @@ from orm import (
     Entity,
     SideEffect,
     Item,
+    BaseEnemy,
     Enemy,
     Protagonist,
     NPC,
