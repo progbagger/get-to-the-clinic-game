@@ -92,7 +92,7 @@ class SideEffect(BaseEntity):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}{{{super().__repr__()}, hp_change={self.hp_change}, xp_change={self.xp_change}, strength_change={self.strength_change}, items={repr(self.items)}}}"
 
-    def apply(self, entity: "Enemy") -> None:
+    def apply(self, entity: "BaseEnemy") -> None:
         """Применить эффект на врага"""
 
         entity.hp += self.hp_change
@@ -113,7 +113,7 @@ class Item(BaseEntity):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}{{{super().__repr__()}, value={self.value}, side_effect={repr(self.side_effect)}, use_count={self.use_count}}}"
 
-    def use(self, enemy: "Enemy") -> None:
+    def use(self, enemy: "BaseEnemy") -> None:
         """Использовать предмет на выбранном враге"""
 
         if self.use_count is not None:
