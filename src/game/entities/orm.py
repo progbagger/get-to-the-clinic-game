@@ -8,6 +8,7 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy import ForeignKey, JSON
 from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.ext.declarative import AbstractConcreteBase
 from typing import Optional
 
 BASE_XP: int = 0
@@ -22,10 +23,14 @@ BASE_VALUE: int = 0
 
 
 class GameException(Exception):
+    """Игровое исключение"""
+
     pass
 
 
 class UsedItemException(GameException):
+    """Предмет уже был использован"""
+
     pass
 
 
@@ -34,6 +39,8 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 
 class BaseEntity(Base):
+    """Самая базовая сущность, свойствами которой обладают все игровые объекты"""
+
     __abstract__ = True
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -46,6 +53,8 @@ class BaseEntity(Base):
 
 
 class Entity(BaseEntity):
+    """Сущность, с которой можно взаимодействовать"""
+
     __abstract__ = True
 
     xp: Mapped[int] = mapped_column(default=BASE_XP)
@@ -65,6 +74,8 @@ class Entity(BaseEntity):
 
 
 class SideEffect(BaseEntity):
+    """Накладываемый на персонажа эффект"""
+
     __tablename__ = "side_effect"
 
     hp_change: Mapped[int] = mapped_column(default=BASE_HP_CHANGE)
@@ -81,6 +92,13 @@ class SideEffect(BaseEntity):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}{{{super().__repr__()}, hp_change={self.hp_change}, xp_change={self.xp_change}, strength_change={self.strength_change}, items={repr(self.items)}}}"
 
+    def apply(self, entity: "Enemy") -> None:
+        """Применить эффект на врага"""
+
+        entity.hp += self.hp_change
+        entity.strength += self.strength_change
+        entity.xp += self.xp_change
+
 
 class Item(BaseEntity):
     __tablename__ = "item"
@@ -96,18 +114,20 @@ class Item(BaseEntity):
         return f"{self.__class__.__name__}{{{super().__repr__()}, value={self.value}, side_effect={repr(self.side_effect)}, use_count={self.use_count}}}"
 
     def use(self, enemy: "Enemy") -> None:
+        """Использовать предмет на выбранном враге"""
+
         if self.use_count is not None:
             if self.use_count == 0:
                 raise UsedItemException(f'Предмет "{self.name}" уже использован')
             self.use_count -= 1
 
-        enemy.hp += self.side_effect.hp_change
-        enemy.strength += self.side_effect.strength_change
-        enemy.xp += self.side_effect.xp_change
+        self.side_effect.apply(enemy)
 
 
-class Enemy(Entity):
-    __tablename__ = "enemy"
+class BaseEnemy(AbstractConcreteBase, Entity):
+    """Объект-связка между `Enemy` и `Protagonist`"""
+
+    __abstract__ = True
     __allow_unmapped__ = True
 
     hp: Mapped[int] = mapped_column(default=BASE_HP)
@@ -119,12 +139,16 @@ class Enemy(Entity):
         return f"{self.__class__.__name__}{{{super().__repr__()}, hp={self.hp}, strength={self.strength}}}"
 
     def heal(self, amount: int = 1) -> None:
-        if self.hp + amount > 10:
-            self.hp = 10
+        """Восполнить здоровье существа, но не больше максимального"""
+
+        if self.hp + amount > BASE_HP:
+            self.hp = BASE_HP
         else:
             self.hp += amount
 
     def take_hit(self, amount: int = 1) -> None:
+        """Получить урон, а если урон отрицательный - подлечиться"""
+
         if amount < 0:
             self.heal(-amount)
         else:
@@ -132,17 +156,31 @@ class Enemy(Entity):
 
     @property
     def current_level(self) -> int:
+        """Конвертировать текущий опыт в уровень"""
+
         # TODO: Придумать систему уровней на основе XP
         pass
 
     def level_up(self) -> int:
+        """Увеличить статистики в связи с переходом на новый уровень"""
+
         pass
 
-    def attack(self, *, enemy: "Enemy", amount: int = 1) -> None:
+    def attack(self, *, enemy: "BaseEnemy", amount: int = 1) -> None:
+        """Нанести урон другому существу"""
+
         enemy.take_hit(amount)
 
 
+class Enemy(BaseEnemy):
+    """Объект, представляющий существо, обладающее здоровьем и силой"""
+
+    __tablename__ = "enemy"
+
+
 class NPC(Entity):
+    """Объект, представляющий неигрового персонажа, с которым можно общаться"""
+
     __tablename__ = "npc"
 
     quest_ids: Mapped[list[int]] = mapped_column(
@@ -157,6 +195,8 @@ class NPC(Entity):
         return f"{self.__class__.__name__}{{{super().__repr__()}, quests={repr(self.quests)}}}"
 
     def take_quests(self) -> list["Quest"]:
+        """Забрать задания у персонажа"""
+
         result = self.quests
         self.quests.clear()
         self.quest_ids.clear()
@@ -164,7 +204,9 @@ class NPC(Entity):
         return result
 
 
-class Protagonist(Entity):
+class Protagonist(BaseEnemy):
+    """Объект, представляющий игрока"""
+
     __tablename__ = "protagonist"
 
     quest_ids: Mapped[list[int]] = mapped_column(
@@ -179,6 +221,8 @@ class Protagonist(Entity):
         return f"{self.__class__.__name__}{{{super().__repr__()}, quests={repr(self.quests)}}}"
 
     def talk_to(self, npc: NPC) -> list["Quest"]:
+        """Поговорить с NPC и забрать его задания"""
+
         new_quests = npc.take_quests()
 
         self.quests.extend(new_quests)
@@ -188,6 +232,8 @@ class Protagonist(Entity):
 
 
 class QuestStatus(Enum):
+    """Возможные статусы заданий"""
+
     NOT_STARTED = auto()
     IN_PROGRESS = auto()
     COMPLETED = auto()
@@ -195,6 +241,8 @@ class QuestStatus(Enum):
 
 
 class Quest(BaseEntity):
+    """Объект, представляющий задание, которое можно выполнить и получить взамен награду"""
+
     __tablename__ = "quest"
 
     required_enemy_ids: Mapped[list[int]] = mapped_column(
@@ -228,6 +276,8 @@ class Quest(BaseEntity):
 
 
 class Location(BaseEntity):
+    """Объект, представляющий собой игровое место, куда можно прийти и где можно найти объекты взаимодействия"""
+
     __tablename__ = "location"
 
     location_ids: Mapped[list[int]] = mapped_column(
