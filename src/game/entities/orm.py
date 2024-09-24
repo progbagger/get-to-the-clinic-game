@@ -7,6 +7,7 @@ from sqlalchemy.orm import (
     declared_attr,
 )
 from sqlalchemy import ForeignKey, JSON
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from typing import Optional
 
 BASE_XP: int = 0
@@ -28,7 +29,7 @@ class UsedItemException(GameException):
     pass
 
 
-class Base(DeclarativeBase):
+class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
