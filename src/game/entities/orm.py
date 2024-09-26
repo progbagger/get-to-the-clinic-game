@@ -389,3 +389,5 @@ if __name__ == "__main__":
 
         print(session.query(Item).all())
         print(session.query(Location).all())
+
+        session.commit()
