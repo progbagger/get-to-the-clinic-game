@@ -390,4 +390,21 @@ if __name__ == "__main__":
         print(session.query(Item).all())
         print(session.query(Location).all())
 
+        protagonist.take_hit()
+        assert session.query(Protagonist).one().hp == BASE_HP - 1
+
+        protagonist.heal()
+        assert session.query(Protagonist).one().hp == BASE_HP
+
+        location.npcs.append(
+            NPC(
+                name="New NPC",
+                description="Some description",
+                start_phrase="",
+                end_phrase="",
+            )
+        )
+        assert session.query(NPC).where(NPC.name == "New NPC").one_or_none() is not None
+
         session.commit()
+        session.close()
