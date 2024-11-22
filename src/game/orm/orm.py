@@ -34,7 +34,7 @@ class Character(Entity):
 
     __abstract__ = True
 
-    xp: Mapped[int] = mapped_column(Integer, default=BASE_XP)
+    xp: Mapped[int] = mapped_column(default=BASE_XP)
     start_phrase: Mapped[str]
     end_phrase: Mapped[str]
 
@@ -48,13 +48,12 @@ class NPC(Character):
     __tablename__ = "npc"
 
     location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"))
+    type: Mapped[str]
 
     location: Mapped["Location"] = relationship(back_populates="npc")
     phrases: Mapped[List["Phrase"]] = relationship(back_populates="npc")
     items: Mapped[List["Item"]] = relationship(back_populates="npc")
     quests: Mapped[List["Quest"]] = relationship(back_populates="npc")
-
-    type: Mapped[str]
 
     __mapper_args__ = {
         "polymorphic_identity": "npc",
@@ -62,7 +61,7 @@ class NPC(Character):
     }
 
     def __repr__(self):
-        return f"NPC({super().__repr__()})"
+        return f"NPC(type={self.type}, {super().__repr__()}, location={self.location.name})"
 
 
 class HpStrengthMixin:
@@ -80,7 +79,7 @@ class Enemy(NPC, HpStrengthMixin):
     __mapper_args__ = {"polymorphic_identity": "enemy"}
 
     def __repr__(self):
-        return f"Enemy({super().__repr__()}, hp={self.hp}, strength={self.strength})"
+        return f"{super().__repr__()}, hp={self.hp}, strength={self.strength}"
 
 
 class Phrase(Base):
@@ -89,12 +88,30 @@ class Phrase(Base):
     __tablename__ = "phrases"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    phrase: Mapped[str]
     npc_id: Mapped[int] = mapped_column(ForeignKey("npc.id"))
+    phrase: Mapped[str]
+
     npc: Mapped["NPC"] = relationship(back_populates="phrases")
 
     def __repr__(self):
         return f"Phrase(phrase={self.phrase}, npc={self.npc.name})"
+
+
+class SideEffect(Entity):
+    """Бафы и дебафы"""
+
+    __tablename__ = "side_effects"
+
+    hp_change: Mapped[int] = mapped_column(default=HP_CHANGE)
+    xp_change: Mapped[int] = mapped_column(default=XP_CHANGE)
+    strength_change: Mapped[int] = mapped_column(default=STRENGHT_CHANGE)
+
+    locations: Mapped[List["Location"]] = relationship(back_populates="side_effect")
+    items: Mapped[List["Item"]] = relationship(back_populates="side_effect")
+    quests: Mapped[List["Quest"]] = relationship(back_populates="side_effect")
+
+    def __repr__(self):
+        return f"SideEffect({super().__repr__()})"
 
 
 class Location(Entity):
@@ -130,42 +147,23 @@ connected_locations = Table(
 )
 
 
-class SideEffect(Entity):
-    """Бафы и дебафы"""
-
-    __tablename__ = "side_effects"
-
-    hp_change: Mapped[int] = mapped_column(default=HP_CHANGE)
-    xp_change: Mapped[int] = mapped_column(default=XP_CHANGE)
-    strength_change: Mapped[int] = mapped_column(default=STRENGHT_CHANGE)
-
-    locations: Mapped[List["Location"]] = relationship(back_populates="side_effect")
-    items: Mapped[List["Item"]] = relationship(back_populates="side_effect")
-    quests: Mapped[List["Quest"]] = relationship(back_populates="side_effect")
-
-    def __repr__(self):
-        return f"SideEffect({super().__repr__()}, hp_change={self.hp_change}, xp_change={self.xp_change}, strength_change={self.strength_change})"
-
-
 class Quest(Entity):
     """Квест"""
 
     __tablename__ = "quests"
 
-    side_effect_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("side_effects.id"), nullable=True, default=None
-    )
-    npc_id: Mapped[int] = mapped_column(ForeignKey("npc.id"))
+    side_effect_id: Mapped[Optional[int]] = mapped_column(ForeignKey("side_effects.id"))
+    npc_id: Mapped[Optional[int]] = mapped_column(ForeignKey("npc.id"), nullable=True)
 
     required_items: Mapped[List["Item"]] = relationship(
-        back_populates="required_for_quest", foreign_keys="[Item.required_for_quest_id]"
+        back_populates="required_for_quest",
+        foreign_keys="[Item.required_for_quest_id]",
     )
-    required_enemies: Mapped[List["Enemy"]] = relationship(
-        secondary="required_quest_enemies"
-    )
+    # parent_quests: Mapped[List["Quest"]] = relationship("Quest")
+    required_npc: Mapped[List["NPC"]] = relationship(secondary="required_for_quest_npc")
 
     side_effect: Mapped["SideEffect"] = relationship(back_populates="quests")
-    npc: Mapped["NPC"] = relationship(back_populates="quests")
+    npc: Mapped["NPC"] = relationship(back_populates="quests", foreign_keys=[npc_id])
     reward: Mapped["Item"] = relationship(
         back_populates="reward_for_quest", foreign_keys="[Item.reward_for_quest_id]"
     )
@@ -174,15 +172,24 @@ class Quest(Entity):
         return f"Quest({super().__repr__()})"
 
 
+required_for_quest_npc = Table(
+    "required_for_quest_npc",
+    Base.metadata,
+    Column("quest_id", ForeignKey("quests.id"), primary_key=True),
+    Column("npc_id", ForeignKey("npc.id"), primary_key=True),
+)
+
+
 class Item(Entity):
     """Предмет, который может использовать персонаж"""
 
     __tablename__ = "items"
 
     side_effect_id: Mapped[Optional[int]] = mapped_column(ForeignKey("side_effects.id"))
-    npc_id: Mapped[Optional[int]] = mapped_column(ForeignKey("npc.id"))
-    reward_for_quest_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quests.id"))
-
+    npc_id: Mapped[Optional[int]] = mapped_column(ForeignKey("npc.id"), nullable=True)
+    reward_for_quest_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("quests.id"), nullable=True
+    )
     location_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("locations.id"), nullable=True
     )
@@ -200,23 +207,16 @@ class Item(Entity):
         back_populates="required_items", foreign_keys=required_for_quest_id
     )
 
-    # __table_args__ = (
-    #     CheckConstraint(
-    #         "(quest_id IS NOT NULL)::int + (npc_id IS NOT NULL)::int + (location_id IS NOT NULL)::int = 1",
-    #         name="one_not_null_check",
-    #     ),
-    # )
+    __table_args__ = (
+        CheckConstraint(
+            "(reward_for_quest_id IS NOT NULL) + (npc_id IS NOT NULL) + (location_id IS NOT NULL) = 1",
+            name="one_not_null_check",
+        ),
+    )
 
     def __repr__(self):
         return f"Item({super().__repr__()})"
 
-
-required_quest_enemies = Table(
-    "required_quest_enemies",
-    Base.metadata,
-    Column("quest_id", ForeignKey("quests.id"), primary_key=True),
-    Column("enemy_id", ForeignKey("enemies.id"), primary_key=True),
-)
 
 # Изменяемые таблицы
 
@@ -231,9 +231,10 @@ class Protagonist(Character, HpStrengthMixin):
     """Протагонист"""
 
     __tablename__ = "protagonists"
-    id: Mapped[int] = mapped_column(primary_key=True)
 
+    id: Mapped[int] = mapped_column(primary_key=True)
     location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"))
+
     location: Mapped["Location"] = relationship()
     quests: Mapped[List["ProtagonistQuest"]] = relationship()
     items: Mapped[List["ProtagonistItems"]] = relationship()
