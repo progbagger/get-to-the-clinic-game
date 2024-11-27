@@ -7,12 +7,24 @@ from orm import Base, Item, SideEffect, Location, NPC, Enemy, Quest
 
 def create_side_effects() -> List[SideEffect]:
     side_effects = [
-        SideEffect(name="+5 к силе", description="+5 к силе", strength_change=5),
-        SideEffect(name="+5 к здоровью", description="+5 к здоровью", hp_change=5),
-        SideEffect(name="+50 к опыту", description="+50 к опыту", xp_change=50),
         SideEffect(
-            name="Очередь к регистратуре",
-            description="Нахождение в очереди к регистратуре сказалась на вас не лучшим образом",
+            id=1,
+            name="Опыт за главный квест",
+            description="За выполение главного квеста +100 к опыту",
+            xp_change=100,
+        ),
+        SideEffect(
+            id=2,
+            name="Опыт за побочный квест",
+            description="За выполение побочного квеста +50 к опыту",
+            xp_change=50,
+        ),
+        SideEffect(id=3, name="+5 к силе", description="+5 к силе", strength_change=5),
+        SideEffect(id=4, name="+5 к силе", description="+5 к здоровью", hp_change=5),
+        SideEffect(
+            id=5,
+            name="Атмосфера в регистраутре",
+            description="Атмосфера отчаяния в регистраутре подействовала на вас",
             hp_change=-1,
             strength_change=-1,
         ),
@@ -22,12 +34,12 @@ def create_side_effects() -> List[SideEffect]:
 
 
 def create_locations() -> List[Location]:
-    locations = [
+    locations: List[Location] = [
         Location(
             id=1,
             name="Регистратура",
             description="Ваше первое испытание",
-            side_effect_id=3,
+            side_effect_id=5,
         ),
         Location(
             id=2,
@@ -37,12 +49,17 @@ def create_locations() -> List[Location]:
                 Item(
                     name="Пончик",
                     description="Это же пончик!",
-                    side_effect_id=1,
+                    side_effect_id=3,
                 )
             ],
         ),
         Location(id=3, name="Кабинет окулиста", description="Тут Зрение проверяют"),
     ]
+    locations[0].neighbour_locations.append(locations[1])
+    locations[1].neighbour_locations.append(locations[0])
+    locations[0].neighbour_locations.append(locations[2])
+    locations[2].neighbour_locations.append(locations[0])
+
     return locations
 
 
@@ -79,21 +96,13 @@ def create_npc() -> List[Location]:
     return npc
 
 
-# def create_items() -> List[Item]:
-#     items = [
-#         Item(name="Бутреброд", description="Это же бутерброд!", side_effect_id=2),
-#     ]
-
-#     return items
-
-
 def create_quest() -> List[Item]:
     quests = [
         Quest(
             id=1,
             name="Поговорить с медсестрой в регистратуре",
             description="Вы пришли в поликлинику и вам нужно пройти медосмотр. Поговорите с медсетрой в регистратуре, чтобы узнать, как пройти медосмотр.",
-            side_effect_id=3,
+            side_effect_id=1,
             required_npc=[
                 Enemy(
                     name="Какая-то бабка",
@@ -108,7 +117,7 @@ def create_quest() -> List[Item]:
                         Item(
                             name="Бутреброд",
                             description="Это же бутерброд!",
-                            side_effect_id=2,
+                            side_effect_id=4,
                         ),
                     ],
                 ),
@@ -118,7 +127,7 @@ def create_quest() -> List[Item]:
             id=2,
             name="Иди к терапевту",
             description="Терапевт даст направление с врачами, которые ты посетил",
-            side_effect_id=3,
+            side_effect_id=1,
             npc_id=1,
         ),
     ]
