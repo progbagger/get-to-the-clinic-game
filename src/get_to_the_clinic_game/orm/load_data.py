@@ -138,7 +138,7 @@ def create_quest() -> List[Item]:
 if __name__ == "__main__":
 
     engine = create_engine(
-        "sqlite:////Users/lavondas/python/get-to-the-clinic-game/src/game/database/database.db",
+        "sqlite:///db.db",
         echo=True,
     )
     Base.metadata.create_all(engine)
