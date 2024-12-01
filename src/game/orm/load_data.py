@@ -103,7 +103,7 @@ def create_quest() -> List[Item]:
             name="Поговорить с медсестрой в регистратуре",
             description="Вы пришли в поликлинику и вам нужно пройти медосмотр. Поговорите с медсетрой в регистратуре, чтобы узнать, как пройти медосмотр.",
             side_effect_id=1,
-            required_npc=[
+            required_npcs=[
                 Enemy(
                     name="Какая-то бабка",
                     description="Это ваш первый противник. Стоит в очереди и не дает вам пройти",
@@ -138,7 +138,7 @@ def create_quest() -> List[Item]:
 if __name__ == "__main__":
 
     engine = create_engine(
-        "sqlite:///database.db",
+        "sqlite:////Users/lavondas/python/get-to-the-clinic-game/src/game/database/database.db",
         echo=True,
     )
     Base.metadata.create_all(engine)
