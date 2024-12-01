@@ -4,10 +4,11 @@ version = "0.1.0"
 description = ""
 authors = [
   "progbagger <thrixstudio@yandex.ru>",
-  "anemon-a <annamatskevich866@gmail.com>"
+  "anemon-a <annamatskevich866@gmail.com>",
 ]
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/progbagger/get-to-the-clinic-game"
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -19,6 +20,8 @@ pytest-asyncio = "^0.24.0"
 mypy = "^1.13.0"
 isort = "^5.13.2"
 ruff = "^0.8.1"
+sqlalchemy = { extras = ["asyncio", "mypy"], version = "^2.0.36" }
+aiosqlite = "^0.20.0"
 
 [build-system]
 requires = ["poetry-core"]
