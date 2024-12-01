@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "get-to-the-clinic-game"
 version = "0.1.0"
-description = ""
+description = " A game about medical examination in Russian clinic"
 authors = [
   "progbagger <thrixstudio@yandex.ru>",
   "anemon-a <annamatskevich866@gmail.com>",
