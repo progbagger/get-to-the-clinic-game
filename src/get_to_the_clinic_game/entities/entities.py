@@ -5,10 +5,8 @@ from game.orm import Protagonist
 
 
 class Game:
-    def __init__(self) -> None:
-        self.engine: Engine = create_engine(
-            "sqlite:////Users/lavondas/python/get-to-the-clinic-game/src/game/database/database.db",
-        )
+    def __init__(self, connection_string: str) -> None:
+        self.engine: Engine = create_engine(connection_string)
         self.protagonist: Protagonist | None = None
 
     def is_protagonist_exists(self, id: int) -> bool:
