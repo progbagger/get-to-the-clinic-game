@@ -1,7 +1,7 @@
 from typing import List
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
-from game.orm import Protagonist
+from get_to_the_clinic_game.orm import Protagonist, Location
 
 
 class Game:
@@ -20,8 +20,11 @@ class Game:
                 id=id,
                 name=name,
                 description="Это ты. Ты пришел в это адовое место под названием поликлиника, чтобы пройти медосмотр для военкомата. Удачи тебе!",
-                start_phrase="Привет, дебил",
-                end_phrase="Пока, дебил",
+                start_phrase=f"Привет, {name}",
+                end_phrase=f"Пока, {name}",
+                location=session.scalar(
+                    select(Location).where(Location.name == "Регистратура")
+                ),
             )
 
             session.add(self.protagonist)

@@ -1,4 +1,5 @@
 from .orm import (
+    Base,
     Entity,
     Character,
     Enemy,
