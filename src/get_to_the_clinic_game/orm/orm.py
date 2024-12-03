@@ -53,7 +53,7 @@ class NPC(Character, kw_only=True):
     __tablename__ = "npcs"
     type: Mapped[str] = mapped_column(init=False)
     location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), init=False)
-    location: Mapped["Location"] = relationship(back_populates="npcs")
+    location: Mapped["Location"] = relationship(back_populates="npcs", default=None)
     items: Mapped[List["Item"]] = relationship(
         back_populates="npc",
         default_factory=list,
@@ -95,7 +95,7 @@ class Phrase(Base, kw_only=True):
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     phrase: Mapped[str]
     enemy_id: Mapped[int] = mapped_column(ForeignKey("enemies.id"), init=False)
-    enemy: Mapped["Enemy"] = relationship(back_populates="phrases")
+    enemy: Mapped["Enemy"] = relationship(back_populates="phrases", default=None)
 
 
 class SideEffect(Entity, kw_only=True):
@@ -175,17 +175,26 @@ class Quest(Entity, kw_only=True):
         foreign_keys="[Item.required_for_quest_id]",
         default_factory=list,
     )
-    # _quests: Mapped[List["Quest"]] = relationship("Quest")
+    required_quests: Mapped[List["Quest"]] = relationship(
+        "Quest",
+        secondary="required_quests",
+        primaryjoin="Quest.id==required_quests.c.parent_quest_id",
+        secondaryjoin="Quest.id==required_quests.c.child_quest_id",
+        back_populates="required_quests",
+        default_factory=list,
+    )
+
     required_npcs: Mapped[List["NPC"]] = relationship(
         secondary="required_for_quest_npcs",
         default_factory=list,
     )
 
-    side_effect: Mapped["SideEffect"] = relationship(back_populates="quests")
+    side_effect: Mapped["SideEffect"] = relationship(
+        back_populates="quests", default=None
+    )
 
     npc: Mapped["NPC"] = relationship(
-        back_populates="quests",
-        foreign_keys=[npc_id],
+        back_populates="quests", foreign_keys=[npc_id], default=None
     )
 
     reward: Mapped[Optional["Item"]] = relationship(
@@ -193,6 +202,14 @@ class Quest(Entity, kw_only=True):
         foreign_keys="[Item.reward_for_quest_id]",
         default=None,
     )
+
+
+required_quests = Table(
+    "required_quests",
+    Base.metadata,
+    Column("parent_quest_id", ForeignKey("quests.id"), primary_key=True),
+    Column("child_quest_id", ForeignKey("quests.id"), primary_key=True),
+)
 
 
 required_for_quest_npcs = Table(
@@ -282,6 +299,7 @@ class ProtagonistQuest(Base):
     protagonist_id: Mapped[int] = mapped_column(
         ForeignKey("protagonists.id"), primary_key=True
     )
+
     quest_id: Mapped[int] = mapped_column(ForeignKey("quests.id"), primary_key=True)
     status: Mapped["Status"]
     quest: Mapped["Quest"] = relationship()

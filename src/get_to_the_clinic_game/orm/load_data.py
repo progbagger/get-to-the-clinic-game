@@ -10,6 +10,7 @@ from get_to_the_clinic_game.orm import (
     NPC,
     Enemy,
     Quest,
+    Phrase,
 )
 
 
@@ -38,46 +39,56 @@ def create_side_effects() -> List[SideEffect]:
     return side_effects
 
 
-def create_locations() -> List[Location]:
-    locations: List[Location] = [
-        Location(
-            name="Регистратура",
-            description="Ваше первое испытание",
-            side_effect_id=5,
+def create_items(*, side_effects: List[SideEffect]) -> List[Item]:
+    items = (
+        Item(
+            name="Бутреброд",
+            description="Это же бутерброд!",
+            side_effect=side_effects[3],
         ),
-        Location(
-            name="Кабинет терапевта",
-            description="Это начало начал",
-            items=[
-                Item(
-                    name="Пончик",
-                    description="Это же пончик!",
-                    side_effect_id=3,
-                )
-            ],
+        Item(
+            name="Пончик",
+            description="Это же пончик!",
+            side_effect=side_effects[2],
         ),
-        Location(name="Кабинет окулиста", description="Тут Зрение проверяют"),
+    )
+    return items
+
+
+def create_quest(
+    *,
+    side_effects: List[SideEffect],
+    items: List[Item],
+    npcs: List[NPC],
+    enemies: List[Enemy],
+) -> List[Quest]:
+    quests = [
+        Quest(
+            name="Поговорить с медсестрой в регистратуре",
+            description="Вы пришли в поликлинику и вам нужно пройти медосмотр. Поговорите с медсетрой в регистратуре, чтобы узнать, как пройти медосмотр.",
+            side_effect=side_effects[0],
+        ),
+        Quest(
+            name="Иди к терапевту",
+            description="Терапевт даст направление с врачами, которые ты посетил",
+            side_effect=side_effects[0],
+            npc=npcs[0],
+        ),
     ]
-    locations[0].neighbour_locations.append(locations[1])
-    locations[1].neighbour_locations.append(locations[0])
-    locations[0].neighbour_locations.append(locations[2])
-    locations[2].neighbour_locations.append(locations[0])
 
-    return locations
+    return quests
 
 
-def create_npc(locations: List[Location]) -> List[Location]:
-    npc = [
+def create_npc() -> List[NPC]:
+    npcs = [
         NPC(
             name="Медсестра Иришка Чики-Пики",
             description="Злая тетка, которая работает в регистратуре",
             start_phrase="Что у вас?",
             end_phrase="Следующий!",
-            location=locations[0],
             xp=50,
         ),
         NPC(
-            location=locations[1],
             name="Терапевт Федор",
             description="Это терапевт, он скажет, каких врачей нужно пройти для медосмотра",
             start_phrase="Здраствуйте, проходите. вы на медосмотр?",
@@ -85,7 +96,6 @@ def create_npc(locations: List[Location]) -> List[Location]:
             xp=100,
         ),
         NPC(
-            location=locations[2],
             name="Окулист Арсюша",
             description="Проверит зрение",
             start_phrase="Здраствуйте, проходите?",
@@ -93,45 +103,58 @@ def create_npc(locations: List[Location]) -> List[Location]:
             xp=150,
         ),
     ]
-    print(npc[0])
-    return npc
+    return npcs
 
 
-def create_quest() -> List[Item]:
-    quests = [
-        Quest(
-            name="Поговорить с медсестрой в регистратуре",
-            description="Вы пришли в поликлинику и вам нужно пройти медосмотр. Поговорите с медсетрой в регистратуре, чтобы узнать, как пройти медосмотр.",
-            side_effect_id=1,
-            required_npcs=[
-                Enemy(
-                    name="Какая-то бабка",
-                    description="Это ваш первый противник. Стоит в очереди и не дает вам пройти",
-                    start_phrase="Ты что сквозь очередь лезешь?",
-                    end_phrase="Ну и молодежь пошла!",
-                    location_id=1,
-                    xp=0,
-                    hp=10,
-                    strength=10,
-                    items=[
-                        Item(
-                            name="Бутреброд",
-                            description="Это же бутерброд!",
-                            side_effect_id=4,
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        Quest(
-            name="Иди к терапевту",
-            description="Терапевт даст направление с врачами, которые ты посетил",
-            side_effect_id=1,
-            npc_id=1,
+def create_enemies(*, items: List[Item]) -> List[Enemy]:
+    enemies = [
+        Enemy(
+            name="Какая-то бабка",
+            description="Это ваш первый противник. Стоит в очереди и не дает вам пройти",
+            start_phrase="Ты что сквозь очередь лезешь?",
+            end_phrase="Ну и молодежь пошла!",
+            xp=0,
+            hp=10,
+            strength=10,
+            items=[items[0]],
+            phrases=[Phrase(phrase="Дурак!"), Phrase(phrase="Дебил!")],
         ),
     ]
+    return enemies
 
-    return quests
+
+def create_locations(
+    *,
+    side_effects: List[SideEffect],
+    items: List[Item],
+    npcs: List[NPC],
+    enemies: List[Enemy],
+) -> List[Location]:
+    locations: List[Location] = [
+        Location(
+            name="Регистратура",
+            description="Ваше первое испытание",
+            side_effect=side_effects[4],
+            npcs=[npcs[0], enemies[0]],
+        ),
+        Location(
+            name="Кабинет терапевта",
+            description="Это начало начал",
+            items=[items[1]],
+            npcs=[npcs[1]],
+        ),
+        Location(
+            name="Кабинет окулиста",
+            description="Тут зрение проверяют",
+            npcs=[npcs[2]],
+        ),
+    ]
+    locations[0].neighbour_locations.append(locations[1])
+    locations[1].neighbour_locations.append(locations[0])
+    locations[0].neighbour_locations.append(locations[2])
+    locations[2].neighbour_locations.append(locations[0])
+
+    return locations
 
 
 if __name__ == "__main__":
@@ -143,14 +166,21 @@ if __name__ == "__main__":
     Base.metadata.create_all(engine)
 
     with Session(engine) as session:
-        session.add_all(create_side_effects())
-        session.commit()
 
-        session.add_all(locations := create_locations())
-        session.commit()
-
-        session.add_all(create_npc(locations))
-        session.commit()
-
-        session.add_all(create_quest())
+        side_effects = create_side_effects()
+        items = create_items(side_effects=side_effects)
+        npcs = create_npc()
+        enemies = create_enemies(items=items)
+        quests = create_quest(
+            side_effects=side_effects, items=items, npcs=npcs, enemies=enemies
+        )
+        locations = create_locations(
+            side_effects=side_effects, items=items, npcs=npcs, enemies=enemies
+        )
+        session.add_all(side_effects)
+        session.add_all(items)
+        session.add_all(npcs)
+        session.add_all(enemies)
+        session.add_all(quests)
+        session.add_all(locations)
         session.commit()
