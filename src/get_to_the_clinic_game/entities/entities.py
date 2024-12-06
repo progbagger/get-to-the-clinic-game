@@ -1,15 +1,17 @@
 from typing import List
 from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from get_to_the_clinic_game.orm import Protagonist, Location
 
 
 class Game:
     def __init__(self, connection_string: str) -> None:
         self.engine: Engine = create_engine(connection_string)
+        self.Session = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.session = self.Session()
         self.protagonist: Protagonist | None = None
 
-    def is_protagonist_exists(self, id: int) -> bool:
+    def protagonist_exists(self, id: int) -> bool:
         with Session(self.engine) as session:
             user = session.scalar(select(Protagonist).where(Protagonist.id == id))
             return bool(user)
@@ -36,3 +38,10 @@ class Game:
             self.protagonist = session.scalar(
                 select(Protagonist).where(Protagonist.id == id)
             )
+
+    def cur_location(self) -> str:
+
+        return self.protagonist.whereami(self.session)
+
+    def get_characters(self):
+        return self.protagonist.location.get_characters(self.session)

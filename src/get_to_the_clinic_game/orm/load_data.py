@@ -135,18 +135,18 @@ def create_locations(
             name="Регистратура",
             description="Ваше первое испытание",
             side_effect=side_effects[4],
-            npcs=[npcs[0], enemies[0]],
+            characters=[npcs[0], enemies[0]],
         ),
         Location(
             name="Кабинет терапевта",
             description="Это начало начал",
             items=[items[1]],
-            npcs=[npcs[1]],
+            characters=[npcs[1]],
         ),
         Location(
             name="Кабинет окулиста",
             description="Тут зрение проверяют",
-            npcs=[npcs[2]],
+            characters=[npcs[2]],
         ),
     ]
     locations[0].neighbour_locations.append(locations[1])
