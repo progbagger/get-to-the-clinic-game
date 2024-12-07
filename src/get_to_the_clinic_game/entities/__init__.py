@@ -1,1 +1,1 @@
-from .entities import Game
+from .entities import Game, Protagonist

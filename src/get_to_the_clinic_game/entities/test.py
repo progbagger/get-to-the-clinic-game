@@ -1,15 +1,46 @@
+from sqlalchemy import create_engine
 from get_to_the_clinic_game.entities import Game
 
 
 if __name__ == "__main__":
-    game = Game("sqlite:///db.db")
-    if game.protagonist_exists(1):
-        game.load_game(1)
+    game = Game(connection_string="sqlite:///db.db")
+
+    if game.protagonist_exists(id=1):
+        game.load_protagonist(id=1)
     else:
-        game.create_game(1, "Aboba")
+        game.create_protagonist(id=1, name="Aboba")
 
-    print("1")
-    print(game.cur_location())
+    cur_location = game.protagonist.whereami()
+    cur_location.side_effect.apply(protagonist=game.protagonist.protagonist)
+    print(game.protagonist.protagonist.hp, game.protagonist.protagonist.strength)
+    cur_location.side_effect.cancel(protagonist=game.protagonist.protagonist)
+    print(game.protagonist.protagonist.hp, game.protagonist.protagonist.strength)
 
-    for i in game.protagonist.location.characters:
-        print(i.name, i.description)
+    print(cur_location.name, cur_location.description, cur_location.side_effect)
+
+    for character in cur_location.characters:
+        print(character.id, character.name, character.type)
+        character = game.protagonist.talk_to(character_id=character.id)
+        if character.type == "npc":
+            for quest in character.quests:
+                print(quest.name)
+        else:
+            print(character.hp, character.strength)
+            for phrase in character.phrases:
+                print(phrase.phrase)
+            for i in character.items:
+                print(i.name)
+
+    for item in cur_location.items:
+        print(item.id, item.name, item.description)
+
+    # for location in game.get_neighbour_locations():
+    #     print(location.name)
+
+    # char = game.protagonist.talk_to(character.id)
+    # if char.type == "enemy":
+    #     print(char.name, char.xp)
+
+    # for i in game.protagonist.location.characters:
+    #     print(i.id, i.name)
+    # print(game.protagonist.talk_to(i.id))

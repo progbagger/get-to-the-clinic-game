@@ -1,24 +1,94 @@
 from typing import List
 from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
-from get_to_the_clinic_game.orm import Protagonist, Location
+from sqlalchemy.orm import (
+    Session,
+    sessionmaker,
+    selectin_polymorphic,
+    joinedload,
+    selectinload,
+)
+from get_to_the_clinic_game.orm import (
+    Protagonist as ProtagonistORM,
+    Location,
+    NPC,
+    Enemy,
+    Character,
+    Quest,
+    Phrase,
+    Item,
+)
+
+
+class Protagonist:
+    def __init__(self, Session: sessionmaker[Session]) -> None:
+        self.protagonist: ProtagonistORM | None = None
+        self.Session = Session
+
+    def whereami(self) -> Location:
+        """Получить локацию, на которой находиться протагонист, с находящимися там персонажами, предметами"""
+        with self.Session() as session:
+            location: Location = session.scalar(
+                select(Location).where(Location.id == self.protagonist.id)
+            )
+        filter_characters = [
+            character
+            for character in location.characters
+            if character.id not in self.protagonist.defeated_enemies
+        ]
+        filter_items = [
+            item for item in location.items if item.id not in self.protagonist.items
+        ]
+        location.characters, location.items = filter_characters, filter_items
+        return location
+
+    def go(self, location_id: int) -> None:
+        with self.Session() as session:
+            # добавить side effects
+            self.location_id = location_id
+            session.refresh()
+
+    def talk_to(self, *, character_id: Character) -> NPC | Enemy:
+        with self.Session() as session:
+            character: NPC | Enemy = session.scalar(
+                select(Character)
+                .filter(Character.id == character_id)
+                .options(
+                    selectin_polymorphic(Character, [NPC, Enemy]),
+                )
+            )
+            if character == "npc":
+                protagonist_quests = {
+                    quest.quest_id for quest in self.protagonist.quests
+                }
+                filter_quests = [
+                    quest
+                    for quest in character.quests
+                    if quest.id not in protagonist_quests
+                ]
+                character.quests = protagonist_quests
+
+        return character
+
+    def use_item(self, *, item: Item, character: Enemy | "ProtagonistORM") -> None:
+        with self.Session() as session:
+            item.use(character=character)
+            self.protagonist.items
 
 
 class Game:
-    def __init__(self, connection_string: str) -> None:
+    def __init__(self, *, connection_string: str) -> None:
         self.engine: Engine = create_engine(connection_string)
-        self.Session = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        self.session = self.Session()
-        self.protagonist: Protagonist | None = None
+        self.Session: sessionmaker[Session] = sessionmaker(bind=self.engine)
+        self.protagonist = Protagonist(self.Session)
 
-    def protagonist_exists(self, id: int) -> bool:
-        with Session(self.engine) as session:
-            user = session.scalar(select(Protagonist).where(Protagonist.id == id))
+    def protagonist_exists(self, *, id: int) -> bool:
+        with self.Session() as session:
+            user = session.scalar(select(ProtagonistORM).where(ProtagonistORM.id == id))
             return bool(user)
 
-    def create_game(self, id: int, name: str) -> None:
-        with Session(self.engine) as session:
-            self.protagonist = Protagonist(
+    def create_protagonist(self, *, id: int, name: str) -> None:
+        with self.Session() as session:
+            new_protagonist = ProtagonistORM(
                 id=id,
                 name=name,
                 description="Это ты. Ты пришел в это адовое место под названием поликлиника, чтобы пройти медосмотр для военкомата. Удачи тебе!",
@@ -29,19 +99,35 @@ class Game:
                 ),
             )
 
-            session.add(self.protagonist)
+            session.add(new_protagonist)
             session.commit()
-            session.refresh(self.protagonist)
+            session.refresh(new_protagonist)
+            self.protagonist.protagonist = new_protagonist
 
-    def load_game(self, id: int) -> None:
-        with Session(self.engine) as session:
-            self.protagonist = session.scalar(
-                select(Protagonist).where(Protagonist.id == id)
+    def load_protagonist(self, *, id: int) -> None:
+        with self.Session() as session:
+            self.protagonist.protagonist = session.scalar(
+                select(ProtagonistORM).where(ProtagonistORM.id == id)
             )
 
-    def cur_location(self) -> str:
+    def get_neighbour_locations(self) -> tuple[int, str]:
+        # хуита какая-то
+        with self.Session() as session:
+            location = session.scalars(
+                select(Location).where(
+                    Location.id == self.protagonist.protagonist.location_id
+                )
+            )
+            return location.neighbour_locations
 
-        return self.protagonist.whereami(self.session)
-
-    def get_characters(self):
-        return self.protagonist.location.get_characters(self.session)
+    # def get_npc_quests(self, npc_id: int) -> List[Quest]:
+    #     with self.Session() as session:
+    #         quests = session.scalars(select(Quest).where(Quest.npc_id == npc_id)).all()
+    #         # chars = selectin_polymorphic(Character, [NPC, Enemy])
+    #         # characters = session.scalars(
+    #         #     select(Character, Character.name).where(
+    #         #         Character.location_id ==
+    #         #     )
+    #         # ).all()
+    #         # return characters
+    #         return quests
