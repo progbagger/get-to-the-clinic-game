@@ -65,14 +65,21 @@ class Protagonist:
                     for quest in character.quests
                     if quest.id not in protagonist_quests
                 ]
-                character.quests = protagonist_quests
+                character.quests = filter_quests
 
         return character
 
-    def use_item(self, *, item: Item, character: Enemy | "ProtagonistORM") -> None:
+    def take_item(self, *, item_id: int) -> None:
         with self.Session() as session:
-            item.use(character=character)
-            self.protagonist.items
+            # self.protagonist.items.append(ProtagonistItems(item_id=item_id, used=False))
+            pass
+
+    def use_item(self, *, item_id: int, character: Enemy | "ProtagonistORM") -> None:
+        with self.Session() as session:
+            for item in self.protagonist.items:
+                if item.item_id == item_id and item.used == False:
+                    item.item.apply_effects(character=character)
+                    item.used = True
 
 
 class Game:
@@ -119,15 +126,3 @@ class Game:
                 )
             )
             return location.neighbour_locations
-
-    # def get_npc_quests(self, npc_id: int) -> List[Quest]:
-    #     with self.Session() as session:
-    #         quests = session.scalars(select(Quest).where(Quest.npc_id == npc_id)).all()
-    #         # chars = selectin_polymorphic(Character, [NPC, Enemy])
-    #         # characters = session.scalars(
-    #         #     select(Character, Character.name).where(
-    #         #         Character.location_id ==
-    #         #     )
-    #         # ).all()
-    #         # return characters
-    #         return quests

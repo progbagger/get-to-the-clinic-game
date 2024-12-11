@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import List, Optional, Set
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Table
+from sqlalchemy.ext.associationproxy import association_proxy, AssociationProxy
 from sqlalchemy.orm import (
     Session,
     MappedAsDataclass,
@@ -124,17 +125,19 @@ class SideEffect(Entity, kw_only=True):
     xp_change: Mapped[int] = mapped_column(default=XP_CHANGE)
     strength_change: Mapped[int] = mapped_column(default=STRENGHT_CHANGE)
 
-    def apply(self, *, protagonist: "Protagonist") -> None:
-        protagonist.hp += self.hp_change
-        protagonist.xp += self.hp_change
-        protagonist.strength += self.hp_change
-        protagonist.apllied_side_effect.add(self.id)
+    def apply(self, *, character: "Protagonist" | "Enemy") -> None:
+        character.hp += self.hp_change
+        character.xp += self.hp_change
+        character.strength += self.hp_change
+        if isinstance(character, Protagonist):
+            character.apllied_side_effect.add(self.id)
 
-    def cancel(self, *, protagonist: "Protagonist") -> None:
-        protagonist.hp -= self.hp_change
-        protagonist.xp -= self.hp_change
-        protagonist.strength -= self.hp_change
-        protagonist.apllied_side_effect.remove(self.id)
+    def cancel(self, *, character: "Protagonist" | "Enemy") -> None:
+        character.hp -= self.hp_change
+        character.xp -= self.hp_change
+        character.strength -= self.hp_change
+        if isinstance(character, Protagonist):
+            character.apllied_side_effect.remove(self.id)
 
 
 class Location(Entity, kw_only=True):
@@ -292,10 +295,8 @@ class Item(Entity, kw_only=True):
         ),
     )
 
-    def use(self, *, character: Enemy | "Protagonist"):
-        character.hp += self.side_effect.hp_change
-        character.xp += self.side_effect.hp_change
-        character.strength += self.side_effect.hp_change
+    def apply_effects(self, *, character: Enemy | "Protagonist") -> None:
+        self.side_effect.apply(character)
 
 
 # Изменяемые таблицы
@@ -310,11 +311,11 @@ class Protagonist(HpStrengthMixin, BaseCharacter, kw_only=True):
     location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), init=False)
     location: Mapped["Location"] = relationship(default=None)
 
-    quests: Mapped[Set["ProtagonistQuest"]] = relationship(
-        default_factory=set, lazy="joined"
+    quests: Mapped[List["ProtagonistQuest"]] = relationship(
+        default_factory=list, lazy="joined"
     )
-    items: Mapped[Set["ProtagonistItems"]] = relationship(
-        default_factory=set, lazy="joined"
+    items: Mapped[List["ProtagonistItems"]] = relationship(
+        default_factory=list, lazy="joined"
     )
     met_npcs: Mapped[Set["NPC"]] = relationship(
         secondary="met_npcs", default_factory=set, lazy="joined"
@@ -329,8 +330,6 @@ class Protagonist(HpStrengthMixin, BaseCharacter, kw_only=True):
     __mapper_args__ = {
         "polymorphic_identity": "protagonist",
     }
-
-    def use_item
 
 
 met_npcs = Table(
