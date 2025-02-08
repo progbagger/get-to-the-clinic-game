@@ -1,7 +1,6 @@
 from enum import Enum
-from typing import List, Optional, Set
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Table
-from sqlalchemy.ext.associationproxy import association_proxy, AssociationProxy
+from typing import List, Optional, Set, Union
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Table, select
 from sqlalchemy.orm import (
     Session,
     MappedAsDataclass,
@@ -10,6 +9,8 @@ from sqlalchemy.orm import (
     mapped_column,
     relationship,
 )
+from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession
+from get_to_the_clinic_game.orm.database import create_session
 
 BASE_XP = 0
 BASE_HP = 10
@@ -25,7 +26,7 @@ class Status(Enum):
     Comleted = 2
 
 
-class Base(MappedAsDataclass, DeclarativeBase):
+class Base(MappedAsDataclass, AsyncAttrs, DeclarativeBase):
     pass
 
 
@@ -104,6 +105,9 @@ class Enemy(HpStrengthMixin, Character, kw_only=True):
 
     __mapper_args__ = {"polymorphic_identity": "enemy"}
 
+    def attack():
+        pass
+
 
 class Phrase(Base, kw_only=True):
     """Фразы для пресонажей"""
@@ -125,19 +129,25 @@ class SideEffect(Entity, kw_only=True):
     xp_change: Mapped[int] = mapped_column(default=XP_CHANGE)
     strength_change: Mapped[int] = mapped_column(default=STRENGHT_CHANGE)
 
-    def apply(self, *, character: "Protagonist" | "Enemy") -> None:
+    def apply(
+        self, *, session: Session, character: Union["Protagonist", "Enemy"]
+    ) -> None:
         character.hp += self.hp_change
         character.xp += self.hp_change
         character.strength += self.hp_change
         if isinstance(character, Protagonist):
             character.apllied_side_effect.add(self.id)
+            session.commit()
 
-    def cancel(self, *, character: "Protagonist" | "Enemy") -> None:
+    def cancel(
+        self, *, session: Session, character: Union["Protagonist", "Enemy"]
+    ) -> None:
         character.hp -= self.hp_change
         character.xp -= self.hp_change
         character.strength -= self.hp_change
         if isinstance(character, Protagonist):
             character.apllied_side_effect.remove(self.id)
+            session.commit()
 
 
 class Location(Entity, kw_only=True):
@@ -236,6 +246,9 @@ class Quest(Entity, kw_only=True):
         lazy="joined",
     )
 
+    def take_quest():
+        pass
+
 
 required_quests = Table(
     "required_quests",
@@ -295,8 +308,9 @@ class Item(Entity, kw_only=True):
         ),
     )
 
-    def apply_effects(self, *, character: Enemy | "Protagonist") -> None:
-        self.side_effect.apply(character)
+    def apply_effects(self, *, character: Union[Enemy, "Protagonist"]) -> None:
+        if self.side_effect:
+            self.side_effect.apply(character)
 
 
 # Изменяемые таблицы
@@ -330,6 +344,21 @@ class Protagonist(HpStrengthMixin, BaseCharacter, kw_only=True):
     __mapper_args__ = {
         "polymorphic_identity": "protagonist",
     }
+
+    @create_session
+    async def whereami(self, *, session: AsyncSession) -> Location:
+        """Получить локацию, на которой находиться протагонист, с находящимися там персонажами, предметами"""
+
+        location: Location = await session.get(Location, self.location_id)
+        filter_characters = [
+            character
+            for character in location.characters
+            if character.id not in self.defeated_enemies
+            and character.id not in self.met_npcs
+        ]
+        filter_items = [item for item in location.items if item.id not in self.items]
+        location.characters, location.items = filter_characters, filter_items
+        return location
 
 
 met_npcs = Table(

@@ -1,6 +1,6 @@
-from typing import List
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session
+import asyncio
+import asyncio.runners
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from get_to_the_clinic_game.orm import (
     Base,
@@ -14,7 +14,7 @@ from get_to_the_clinic_game.orm import (
 )
 
 
-def create_side_effects() -> List[SideEffect]:
+def create_side_effects() -> list[SideEffect]:
     side_effects = [
         SideEffect(
             name="Опыт за главный квест",
@@ -39,7 +39,7 @@ def create_side_effects() -> List[SideEffect]:
     return side_effects
 
 
-def create_items(*, side_effects: List[SideEffect]) -> List[Item]:
+def create_items(*, side_effects: list[SideEffect]) -> list[Item]:
     items = (
         Item(
             name="Бутреброд",
@@ -57,11 +57,11 @@ def create_items(*, side_effects: List[SideEffect]) -> List[Item]:
 
 def create_quest(
     *,
-    side_effects: List[SideEffect],
-    items: List[Item],
-    npcs: List[NPC],
-    enemies: List[Enemy],
-) -> List[Quest]:
+    side_effects: list[SideEffect],
+    items: list[Item],
+    npcs: list[NPC],
+    enemies: list[Enemy],
+) -> list[Quest]:
     quests = [
         Quest(
             name="Поговорить с медсестрой в регистратуре",
@@ -79,7 +79,7 @@ def create_quest(
     return quests
 
 
-def create_npc() -> List[NPC]:
+def create_npc() -> list[NPC]:
     npcs = [
         NPC(
             name="Медсестра Иришка Чики-Пики",
@@ -106,7 +106,7 @@ def create_npc() -> List[NPC]:
     return npcs
 
 
-def create_enemies(*, items: List[Item]) -> List[Enemy]:
+def create_enemies(*, items: list[Item]) -> list[Enemy]:
     enemies = [
         Enemy(
             name="Какая-то бабка",
@@ -125,12 +125,12 @@ def create_enemies(*, items: List[Item]) -> List[Enemy]:
 
 def create_locations(
     *,
-    side_effects: List[SideEffect],
-    items: List[Item],
-    npcs: List[NPC],
-    enemies: List[Enemy],
-) -> List[Location]:
-    locations: List[Location] = [
+    side_effects: list[SideEffect],
+    items: list[Item],
+    npcs: list[NPC],
+    enemies: list[Enemy],
+) -> list[Location]:
+    locations: list[Location] = [
         Location(
             name="Регистратура",
             description="Ваше первое испытание",
@@ -157,15 +157,19 @@ def create_locations(
     return locations
 
 
-if __name__ == "__main__":
+async def main() -> None:
 
-    engine = create_engine(
-        "sqlite:///db.db",
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///db.db",
         echo=True,
     )
-    Base.metadata.create_all(engine)
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
 
-    with Session(engine) as session:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with async_session() as session:
 
         side_effects = create_side_effects()
         items = create_items(side_effects=side_effects)
@@ -183,4 +187,8 @@ if __name__ == "__main__":
         session.add_all(enemies)
         session.add_all(quests)
         session.add_all(locations)
-        session.commit()
+        await session.commit()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
