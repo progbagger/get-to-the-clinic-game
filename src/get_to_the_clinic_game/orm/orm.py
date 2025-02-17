@@ -1,6 +1,7 @@
 from enum import Enum
-from typing import List, Optional, Set, Union
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Table, select
+import select
+from typing import Optional, Union
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Table
 from sqlalchemy.orm import (
     Session,
     MappedAsDataclass,
@@ -8,8 +9,11 @@ from sqlalchemy.orm import (
     Mapped,
     mapped_column,
     relationship,
+    selectin_polymorphic,
+    joinedload,
+    selectinload,
 )
-from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from get_to_the_clinic_game.orm.database import create_session
 
 BASE_XP = 0
@@ -76,7 +80,7 @@ class NPC(Character, kw_only=True):
     id: Mapped[int] = mapped_column(
         ForeignKey("characters.id"), primary_key=True, init=False
     )
-    quests: Mapped[List["Quest"]] = relationship(
+    quests: Mapped[list["Quest"]] = relationship(
         back_populates="npc", default_factory=list, lazy="joined"
     )
 
@@ -96,10 +100,10 @@ class Enemy(HpStrengthMixin, Character, kw_only=True):
     id: Mapped[int] = mapped_column(
         ForeignKey("characters.id"), primary_key=True, init=False
     )
-    phrases: Mapped[List["Phrase"]] = relationship(
+    phrases: Mapped[list["Phrase"]] = relationship(
         back_populates="enemy", default_factory=list, lazy="joined"
     )
-    items: Mapped[List["Item"]] = relationship(
+    items: Mapped[list["Item"]] = relationship(
         back_populates="enemy", default_factory=list, lazy="joined"
     )
 
@@ -163,14 +167,14 @@ class Location(Entity, kw_only=True):
 
     side_effect: Mapped["SideEffect"] = relationship(default=None, lazy="selectin")
 
-    items: Mapped[List["Item"]] = relationship(
+    items: Mapped[list["Item"]] = relationship(
         back_populates="location", default_factory=list, lazy="joined"
     )
-    characters: Mapped[List["Character"]] = relationship(
+    characters: Mapped[list["Character"]] = relationship(
         back_populates="location", default_factory=list, lazy="joined"
     )
 
-    neighbour_locations: Mapped[List["Location"]] = relationship(
+    neighbour_locations: Mapped[list["Location"]] = relationship(
         "Location",
         secondary="connected_locations",
         primaryjoin="Location.id==connected_locations.c.location_id",
@@ -220,13 +224,13 @@ class Quest(Entity, kw_only=True):
         default=None,
         lazy="joined",
     )
-    required_items: Mapped[List["Item"]] = relationship(
+    required_items: Mapped[list["Item"]] = relationship(
         back_populates="required_for_quest",
         foreign_keys="[Item.required_for_quest_id]",
         default_factory=list,
         lazy="joined",
     )
-    required_quests: Mapped[List["Quest"]] = relationship(
+    required_quests: Mapped[list["Quest"]] = relationship(
         "Quest",
         secondary="required_quests",
         primaryjoin="Quest.id==required_quests.c.parent_quest_id",
@@ -235,18 +239,18 @@ class Quest(Entity, kw_only=True):
         default_factory=list,
         lazy="joined",
     )
-    required_npcs: Mapped[List["NPC"]] = relationship(
+    required_npcs: Mapped[list["NPC"]] = relationship(
         secondary="required_for_quest_npcs",
         default_factory=list,
         lazy="joined",
     )
-    required_enemies: Mapped[List["Enemy"]] = relationship(
+    required_enemies: Mapped[list["Enemy"]] = relationship(
         secondary="required_for_quest_enemies",
         default_factory=list,
         lazy="joined",
     )
 
-    def take_quest():
+    async def look_up():
         pass
 
 
@@ -325,19 +329,19 @@ class Protagonist(HpStrengthMixin, BaseCharacter, kw_only=True):
     location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), init=False)
     location: Mapped["Location"] = relationship(default=None)
 
-    quests: Mapped[List["ProtagonistQuest"]] = relationship(
+    quests: Mapped[list["ProtagonistQuest"]] = relationship(
         default_factory=list, lazy="joined"
     )
-    items: Mapped[List["ProtagonistItems"]] = relationship(
+    items: Mapped[list["ProtagonistItems"]] = relationship(
         default_factory=list, lazy="joined"
     )
-    met_npcs: Mapped[Set["NPC"]] = relationship(
+    met_npcs: Mapped[set["NPC"]] = relationship(
         secondary="met_npcs", default_factory=set, lazy="joined"
     )
-    defeated_enemies: Mapped[Set["Enemy"]] = relationship(
+    defeated_enemies: Mapped[set["Enemy"]] = relationship(
         secondary="defeated_enemies", default_factory=set, lazy="joined"
     )
-    apllied_side_effect: Mapped[Set["SideEffect"]] = relationship(
+    apllied_side_effect: Mapped[set["SideEffect"]] = relationship(
         secondary="apllied_side_effect", default_factory=set, lazy="joined"
     )
 
@@ -345,20 +349,44 @@ class Protagonist(HpStrengthMixin, BaseCharacter, kw_only=True):
         "polymorphic_identity": "protagonist",
     }
 
-    @create_session
-    async def whereami(self, *, session: AsyncSession) -> Location:
+    async def whereami(self) -> Location:
         """Получить локацию, на которой находиться протагонист, с находящимися там персонажами, предметами"""
+        async with create_session() as session:
+            location: Location = await session.get(Location, self.location_id)
+            filter_characters = [
+                character
+                for character in location.characters
+                if character.id not in self.defeated_enemies
+                and character.id not in self.met_npcs
+            ]
+            filter_items = [
+                item for item in location.items if item.id not in self.items
+            ]
+            location.characters, location.items = filter_characters, filter_items
+            return location
 
-        location: Location = await session.get(Location, self.location_id)
-        filter_characters = [
-            character
-            for character in location.characters
-            if character.id not in self.defeated_enemies
-            and character.id not in self.met_npcs
-        ]
-        filter_items = [item for item in location.items if item.id not in self.items]
-        location.characters, location.items = filter_characters, filter_items
-        return location
+    async def talk_to(self, *, character_id: Character) -> NPC | Enemy:
+        async with create_session() as session:
+            character: NPC | Enemy = session.scalar(
+                select(Character)
+                .filter(Character.id == character_id)
+                .options(
+                    selectin_polymorphic(Character, [NPC, Enemy]),
+                )
+            )
+            if character == "npc":
+                protagonist_quests = {quest.quest_id for quest in self.quests}
+                filter_quests = [
+                    quest
+                    for quest in character.quests
+                    if quest.id not in protagonist_quests
+                ]
+                character.quests = filter_quests
+
+        return character
+
+    def take_quest():
+        pass
 
 
 met_npcs = Table(

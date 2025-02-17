@@ -1,11 +1,6 @@
 import asyncio
 from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.orm import (
-    sessionmaker,
-    selectin_polymorphic,
-    joinedload,
-    selectinload,
-)
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from get_to_the_clinic_game.orm.database import create_session
 from get_to_the_clinic_game.orm import (
@@ -25,34 +20,31 @@ class Game:
         self.protagonist: Protagonist | None = None
 
     @staticmethod
-    @create_session
-    async def protagonist_exists(*, id: int, session: AsyncSession) -> bool:
-        user = await session.get(Protagonist, id)
+    async def protagonist_exists(*, id: int) -> bool:
+        async with create_session() as session:
+            user = await session.get(Protagonist, id)
         return bool(user)
 
-    @create_session
-    async def create_protagonist(
-        self, *, id: int, name: str, session: AsyncSession
-    ) -> None:
+    async def create_protagonist(self, *, id: int, name: str) -> None:
+        async with create_session() as session:
+            self.protagonist = Protagonist(
+                id=id,
+                name=name,
+                description="Это ты. Ты пришел в это адовое место под названием поликлиника, чтобы пройти медосмотр для военкомата. Удачи тебе!",
+                start_phrase=f"Привет, {name}",
+                end_phrase=f"Пока, {name}",
+                location=await session.scalar(
+                    select(Location).where(Location.name == "Регистратура")
+                ),
+            )
 
-        self.protagonist = Protagonist(
-            id=id,
-            name=name,
-            description="Это ты. Ты пришел в это адовое место под названием поликлиника, чтобы пройти медосмотр для военкомата. Удачи тебе!",
-            start_phrase=f"Привет, {name}",
-            end_phrase=f"Пока, {name}",
-            location=await session.scalar(
-                select(Location).where(Location.name == "Регистратура")
-            ),
-        )
+            session.add(self.protagonist)
+            await session.commit()
+            await session.refresh(self.protagonist)
 
-        session.add(self.protagonist)
-        await session.commit()
-        await session.refresh(self.protagonist)
-
-    @create_session
-    async def load_protagonist(self, *, id: int, session: AsyncSession) -> None:
-        self.protagonist = await session.get(Protagonist, id)
+    async def load_protagonist(self, *, id: int) -> None:
+        async with create_session() as session:
+            self.protagonist = await session.get(Protagonist, id)
 
 
 # class Protagonist:
@@ -60,22 +52,6 @@ class Game:
 #         self.protagonist: ProtagonistORM | None = None
 #         self.Session = Session
 
-# def whereami(self) -> Location:
-#     """Получить локацию, на которой находиться протагонист, с находящимися там персонажами, предметами"""
-#     with self.Session() as session:
-#         location: Location = session.scalar(
-#             select(Location).where(Location.id == self.protagonist.id)
-#         )
-#     filter_characters = [
-#         character
-#         for character in location.characters
-#         if character.id not in self.protagonist.defeated_enemies
-#     ]
-#     filter_items = [
-#         item for item in location.items if item.id not in self.protagonist.items
-#     ]
-#     location.characters, location.items = filter_characters, filter_items
-#     return location
 
 # def go(self, location_id: int) -> None:
 #     with self.Session() as session:

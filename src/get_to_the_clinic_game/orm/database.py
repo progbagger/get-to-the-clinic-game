@@ -1,5 +1,7 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from functools import wraps
+from contextlib import asynccontextmanager
 
 connection_string = "sqlite+aiosqlite:///db.db"
 engine = create_async_engine(
@@ -9,20 +11,7 @@ engine = create_async_engine(
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 
-class DatabaseManager:
-
-    def __init__(self):
-        pass
-
-
-def create_session(func):
-    @wraps
-    async def wrapper(*args, **kwargs):
-        async with async_session() as session:
-            # try:
-            return await func(*args, **kwargs, session=session)
-        # except Exception as e:
-        #     await session.rollback()
-        #     raise
-
-    return wrapper
+@asynccontextmanager
+async def create_session() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session() as session:
+        yield session
