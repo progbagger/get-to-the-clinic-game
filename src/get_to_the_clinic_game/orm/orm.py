@@ -3,7 +3,6 @@ from typing import Optional, Union
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Table, select
 from sqlalchemy.orm import (
     MappedAsDataclass,
-    DeclarativeBase,
     Mapped,
     mapped_column,
     relationship,
@@ -11,8 +10,14 @@ from sqlalchemy.orm import (
     joinedload,
     selectinload,
 )
-from sqlalchemy.ext.asyncio import AsyncAttrs
-from get_to_the_clinic_game.orm.database import create_session
+from get_to_the_clinic_game.orm.database import Base
+from os import getenv
+
+if getenv("TESTING"):
+    from get_to_the_clinic_game.orm.database import test_db_manager as db_manager
+else:
+
+    from get_to_the_clinic_game.orm.database import db_manager
 
 
 BASE_XP = 0
@@ -27,10 +32,6 @@ class Status(Enum):
     NotStarted = 0
     InProgress = 1
     Completed = 2
-
-
-class Base(MappedAsDataclass, AsyncAttrs, DeclarativeBase):
-    pass
 
 
 class Entity(Base, kw_only=True):
@@ -74,7 +75,7 @@ class Character(BaseCharacter, kw_only=True):
 
     @staticmethod
     async def get_full_character_info(character_id: int) -> Union["Enemy", "NPC"]:
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
             query = (
                 select(Character)
                 .options(
@@ -110,7 +111,7 @@ class NPC(Character, kw_only=True):
 
     @staticmethod
     async def get_all_npc_quest(npc_id: int) -> list["Quest"]:
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
             quests = (
                 await session.scalars((select(Quest).filter(Quest.npc_id == npc_id)))
             ).all()
@@ -196,7 +197,7 @@ class SideEffect(Entity, kw_only=True):
         return res + ")"
 
     # async def apply(self, *, character: Union["Protagonist", "Enemy"]) -> None:
-    #     async with create_session() as session:
+    #     async with db_manager.get_session() as session:
     #         character.hp += self.hp_change
     #         character.xp += self.hp_change
     #         character.strength += self.hp_change
@@ -205,7 +206,7 @@ class SideEffect(Entity, kw_only=True):
     #             session.commit()
 
     # async def cancel(self, *, character: Union["Protagonist", "Enemy"]) -> None:
-    #     async with create_session() as session:
+    #     async with db_manager.get_session() as session:
     #         character.hp -= self.hp_change
     #         character.xp -= self.hp_change
     #         character.strength -= self.hp_change
@@ -269,7 +270,7 @@ class Location(Entity, kw_only=True):
     async def get_full_info_location(
         location_id: int, protagonist_id: int
     ) -> "Location":
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
 
             subquery1 = (
                 select(defeated_enemies.c.enemy_id)
@@ -298,7 +299,7 @@ class Location(Entity, kw_only=True):
 
     @staticmethod
     async def get_neighbour_locations(location_id: int) -> list["Location"]:
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
             query = (
                 select(Location)
                 .join(
@@ -314,7 +315,7 @@ class Location(Entity, kw_only=True):
     async def get_all_characters_on_location(
         location_id: int, protagonist_id: int
     ) -> list["Character"]:
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
             subquery = (
                 select(defeated_enemies.c.enemy_id)
                 .where(defeated_enemies.c.protagonist_id == protagonist_id)
@@ -331,10 +332,8 @@ class Location(Entity, kw_only=True):
             return characters
 
     @staticmethod
-    async def get_all_items_on_location(
-        location_id: int, protagonist_id: int
-    ) -> list["Item"]:
-        async with create_session() as session:
+    async def get_location_items(location_id: int, protagonist_id: int) -> list["Item"]:
+        async with db_manager.get_session() as session:
             subquery = (
                 select(ProtagonistItems.item_id)
                 .where(ProtagonistItems.protagonist_id == protagonist_id)
@@ -438,7 +437,7 @@ class Quest(Entity, kw_only=True):
 
     @staticmethod
     async def get_full_quest_info(quest_id: int) -> "Quest":
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
             query = (
                 select(Quest)
                 .options(
@@ -594,7 +593,7 @@ class Protagonist(HpStrengthMixin, BaseCharacter, kw_only=True):
     #     return location
 
     # async def go(self, location_id: int) -> None:
-    #     async with create_session() as session:
+    #     async with db_manager.get_session() as session:
     #         self.location.side_effect.cancel(self)
     #         self.location_id = location_id
     #         session.refresh()

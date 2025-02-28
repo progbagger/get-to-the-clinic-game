@@ -1,9 +1,6 @@
 import asyncio
-import asyncio.runners
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-
+from get_to_the_clinic_game.orm.database import db_manager
 from get_to_the_clinic_game.orm import (
-    Base,
     Item,
     SideEffect,
     Location,
@@ -185,17 +182,10 @@ def create_locations(
 
 async def main() -> None:
 
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///db.db",
-        echo=True,
-    )
-    async_session = async_sessionmaker(engine, expire_on_commit=False)
+    await db_manager.drop_tables()
+    await db_manager.create_tables()
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with async_session() as session:
+    async with db_manager.get_session() as session:
 
         side_effects = create_side_effects()
         items = create_items(side_effects=side_effects)

@@ -1,7 +1,6 @@
 import asyncio
 from sqlalchemy import select
-
-from get_to_the_clinic_game.orm.database import create_session
+from get_to_the_clinic_game.orm.database import db_manager
 from get_to_the_clinic_game.orm import (
     Protagonist,
     Location,
@@ -12,14 +11,14 @@ class Game:
 
     @staticmethod
     async def protagonist_exists(id: int) -> bool:
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
             user = await session.get(Protagonist, id)
 
             return bool(user)
 
     @staticmethod
     async def create_protagonist(id: int, name: str) -> None:
-        async with create_session() as session:
+        async with db_manager.get_session() as session:
             protagonist = Protagonist(
                 id=id,
                 name=name,
