@@ -149,6 +149,15 @@ class Enemy(HpStrengthMixin, Character, kw_only=True):
 
     __mapper_args__ = {"polymorphic_identity": "enemy"}
 
+    @staticmethod
+    async def get_enemy_items(enemy_id: int) -> list["Item"]:
+        async with db_manager.get_session() as session:
+            query = select(Item).where(Item.enemy_id == enemy_id)
+
+            items = (await session.scalars(query)).all()
+
+            return items
+
     async def attack():
         pass
 
@@ -286,6 +295,7 @@ class Location(Entity, kw_only=True):
 
             query = (
                 select(Location)
+                .options(selectinload(Location.side_effect))
                 .options(joinedload(Location.characters))
                 .options(joinedload(Location.items))
                 .options(joinedload(Location.neighbour_locations))
@@ -312,7 +322,7 @@ class Location(Entity, kw_only=True):
             return neighbours
 
     @staticmethod
-    async def get_all_characters_on_location(
+    async def get_location_characters(
         location_id: int, protagonist_id: int
     ) -> list["Character"]:
         async with db_manager.get_session() as session:
@@ -545,6 +555,20 @@ class Item(Entity, kw_only=True):
     # def apply_side_effect(self, *, character: Union["Protagonist", "Enemy"]) -> None:
     #     if self.side_effect:
     #         self.side_effect.apply(character)
+
+    @staticmethod
+    async def get_full_item_info(item_id: int) -> "Item":
+        async with db_manager.get_session() as session:
+            query = (
+                select(Item)
+                .options(selectinload(Item.side_effect))
+                .options(joinedload(Item.required_for_quest))
+                .where(Item.id == item_id)
+            )
+
+            item = await session.scalar(query)
+
+            return item
 
 
 # Изменяемые таблицы
