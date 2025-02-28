@@ -73,27 +73,19 @@ class Character(BaseCharacter, kw_only=True):
     }
 
     @staticmethod
-    async def get_full_character_info(
-        character_id: int, protagonist_id: int
-    ) -> Union["Enemy", "NPC"]:
+    async def get_full_character_info(character_id: int) -> Union["Enemy", "NPC"]:
         async with create_session() as session:
-
-            character: NPC | Enemy = await session.scalar(
+            query = (
                 select(Character)
-                .filter(Character.id == character_id)
                 .options(
                     selectin_polymorphic(Character, [NPC, Enemy]),
+                    selectinload(NPC.quests),
                 )
+                .where(Character.id == character_id)
             )
-            # if character == "npc":
 
-            #     # отфильтровать квесты, которые есть уже взял протагониста
+            character: Enemy = await session.scalar(query)
 
-            #     character.quests = [
-            #         quest
-            #         for quest in character.quests
-            #         if quest.id not in protagonist_quests
-            #     ]
             return character
 
 
