@@ -43,9 +43,19 @@ def side_effects() -> list[SideEffect]:
         ),
         SideEffect(
             name="Атмосфера в регистраутре",
-            description="Атмосфера отчаяния в регистраутре подействовала на вас",
+            description="Атмосфера отчаяния и безнадёги в регистраутре",
             hp_change=-1,
             strength_change=-1,
+        ),
+        SideEffect(
+            name="Эффект сигарет здоровья",
+            description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будуте здоровыми :р",
+            hp_change=5,
+        ),
+        SideEffect(
+            name="Эффект пончика диабета",
+            description="+ 1 к силе",
+            strength_change=1,
         ),
     ]
 
@@ -63,12 +73,6 @@ def locations(side_effects: list[SideEffect]) -> list[Location]:
         Location(
             name="Кабинет терапевта",
             description="Это начало начал",
-            items=[
-                Item(
-                    name="Пончик",
-                    description="Это же пончик!",
-                )
-            ],
         ),
     ]
     return locations
@@ -106,26 +110,43 @@ def enemies(locations: list[Location]) -> list[Location]:
             start_phrase="Ты что сквозь очередь лезешь?",
             end_phrase="Ну и молодежь пошла!",
             location=locations[0],
-            phrases=[
-                Phrase(phrase="Дебил!"),
-            ],
-        )
+            phrases=[Phrase(phrase="Дебил!"), Phrase(phrase="Дурак!")],
+        ),
+        Enemy(
+            name="Типичная яжмамка",
+            description="Пришла со своим мелким дебилом и орет на всю больницу",
+            start_phrase="Ну я же мать",
+            end_phrase="Ну я же мать!",
+            location=locations[1],
+            phrases=[Phrase(phrase="Дебил!"), Phrase(phrase="Дурак!")],
+        ),
     ]
-    phrase = Phrase(phrase="Дурак!", enemy=enemies[0])
+
     return enemies
 
 
 @pytest.fixture
 def items(
-    npcs: list[NPC], enemies: list[Enemy], locations: list[Location]
+    enemies: list[Enemy], locations: list[Location], side_effects: list[SideEffect]
 ) -> list[Item]:
 
     items = [
-        Item(name="Бутреброд", description="Это же бутерброд!", npc=enemies[0]),
+        Item(name="Бутреброд", description="Это же бутерброд!", enemy=enemies[0]),
         Item(
             name="Жвачка",
             description="Чтобы из-за рта не пахло сигами.",
             location=locations[0],
+        ),
+        Item(
+            name="Пончик диабета",
+            description="Пончик диабета! сахар +100, сила +1",
+            location=locations[1],
+            side_effect=side_effects[3],
+        ),
+        Item(
+            name="Сигареты",
+            description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будуте здоровыми :р Всем советую!",
+            location=locations[1],
         ),
     ]
 
@@ -137,7 +158,7 @@ def quests(npcs: list[NPC], side_effects: list[SideEffect]) -> list[Quest]:
     quests = [
         Quest(
             name="Иди к терапевту",
-            description="Терапевт даст направление с врачами, которые ты посетил",
+            description="Терапевт даст направление с врачами, которые тебе нужно посетить",
             side_effect=side_effects[0],
             npc=npcs[0],
             required_npcs=[npcs[1]],
@@ -165,7 +186,7 @@ def test_locations(create_tables, locations: list[Location], session: Session):
     assert locations[1].items == session.scalars(select(Item)).all()
 
 
-def test_locations(create_tables, npcs: list[NPC], session: Session):
+def test_npcs(create_tables, npcs: list[NPC], session: Session):
     session.add_all(npcs)
     session.commit()
 
@@ -176,8 +197,8 @@ def test_enemies(create_tables, enemies: list[Enemy], session: Session):
     session.add_all(enemies)
     session.commit()
 
-    assert enemies[0] == session.scalars(select(Enemy)).one()
-    assert enemies[0].phrases == session.scalars(select(Phrase)).all()
+    assert enemies == session.scalars(select(Enemy)).all()
+    assert enemies[0] == session.scalars(select(Enemy).where(Enemy.id == 1)).one()
 
 
 def test_items(create_tables, items: list[Item], session: Session):
@@ -185,6 +206,7 @@ def test_items(create_tables, items: list[Item], session: Session):
     session.commit()
 
     assert items == session.scalars(select(Item)).all()
+    assert items[0] == session.scalars(select(Item).where(Item.id == 1)).one()
 
 
 def test_quests(create_tables, quests: list[Quest], session: Session):
