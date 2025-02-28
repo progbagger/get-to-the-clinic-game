@@ -1,5 +1,4 @@
 from enum import Enum
-from shlex import join
 from typing import Optional, Union
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Table, select
 from sqlalchemy.orm import (
@@ -10,6 +9,7 @@ from sqlalchemy.orm import (
     relationship,
     selectin_polymorphic,
     joinedload,
+    selectinload,
 )
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from get_to_the_clinic_game.orm.database import create_session
@@ -57,13 +57,14 @@ class Character(BaseCharacter, kw_only=True):
     """Класс для NPC и Enemy"""
 
     __tablename__ = "characters"
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), init=False)
 
+    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), init=False)
     type: Mapped[str] = mapped_column(init=False)
 
     location: Mapped["Location"] = relationship(
         back_populates="characters",
         default=None,
+        lazy=None,
     )
 
     __mapper_args__ = {
@@ -102,14 +103,16 @@ class NPC(Character, kw_only=True):
     __tablename__ = "npcs"
 
     id: Mapped[int] = mapped_column(
-        ForeignKey("characters.id"), primary_key=True, init=False
-    )
-    quests: Mapped[list["Quest"]] = relationship(
-        back_populates="npc", default_factory=list
+        ForeignKey("characters.id"),
+        primary_key=True,
+        init=False,
     )
 
-    async def get_quests(self) -> list[tuple[int, str]]:
-        pass
+    quests: Mapped[list["Quest"]] = relationship(
+        back_populates="npc",
+        default_factory=list,
+        lazy=None,
+    )
 
     __mapper_args__ = {"polymorphic_identity": "npc"}
 
@@ -134,15 +137,21 @@ class Enemy(HpStrengthMixin, Character, kw_only=True):
     __tablename__ = "enemies"
 
     id: Mapped[int] = mapped_column(
-        ForeignKey("characters.id"), primary_key=True, init=False
+        ForeignKey("characters.id"),
+        primary_key=True,
+        init=False,
     )
+
     phrases: Mapped[list["Phrase"]] = relationship(
         back_populates="enemy",
         default_factory=list,
+        lazy=None,
     )
+
     items: Mapped[list["Item"]] = relationship(
         back_populates="enemy",
         default_factory=list,
+        lazy=None,
     )
 
     __mapper_args__ = {"polymorphic_identity": "enemy"}
@@ -158,8 +167,17 @@ class Phrase(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     phrase: Mapped[str]
-    enemy_id: Mapped[int] = mapped_column(ForeignKey("enemies.id"), init=False)
-    enemy: Mapped["Enemy"] = relationship(back_populates="phrases", default=None)
+
+    enemy_id: Mapped[int] = mapped_column(
+        ForeignKey("enemies.id"),
+        init=False,
+    )
+
+    enemy: Mapped["Enemy"] = relationship(
+        back_populates="phrases",
+        default=None,
+        lazy=None,
+    )
 
 
 class SideEffect(Entity, kw_only=True):
@@ -171,7 +189,7 @@ class SideEffect(Entity, kw_only=True):
     xp_change: Mapped[int] = mapped_column(default=XP_CHANGE)
     strength_change: Mapped[int] = mapped_column(default=STRENGHT_CHANGE)
 
-    def __str__(self):
+    def __repr__(self):
         res = f"{self.description} ("
 
         if self.hp_change:
@@ -185,23 +203,23 @@ class SideEffect(Entity, kw_only=True):
 
         return res + ")"
 
-    async def apply(self, *, character: Union["Protagonist", "Enemy"]) -> None:
-        async with create_session() as session:
-            character.hp += self.hp_change
-            character.xp += self.hp_change
-            character.strength += self.hp_change
-            if isinstance(character, Protagonist):
-                character.apllied_side_effect.add(self.id)
-                session.commit()
+    # async def apply(self, *, character: Union["Protagonist", "Enemy"]) -> None:
+    #     async with create_session() as session:
+    #         character.hp += self.hp_change
+    #         character.xp += self.hp_change
+    #         character.strength += self.hp_change
+    #         if isinstance(character, Protagonist):
+    #             character.apllied_side_effect.add(self.id)
+    #             session.commit()
 
-    async def cancel(self, *, character: Union["Protagonist", "Enemy"]) -> None:
-        async with create_session() as session:
-            character.hp -= self.hp_change
-            character.xp -= self.hp_change
-            character.strength -= self.hp_change
-            if isinstance(character, Protagonist):
-                character.apllied_side_effect.remove(self.id)
-                session.commit()
+    # async def cancel(self, *, character: Union["Protagonist", "Enemy"]) -> None:
+    #     async with create_session() as session:
+    #         character.hp -= self.hp_change
+    #         character.xp -= self.hp_change
+    #         character.strength -= self.hp_change
+    #         if isinstance(character, Protagonist):
+    #             character.apllied_side_effect.remove(self.id)
+    #             session.commit()
 
 
 class Location(Entity, kw_only=True):
@@ -215,15 +233,21 @@ class Location(Entity, kw_only=True):
         init=False,
     )
 
-    side_effect: Mapped["SideEffect"] = relationship(default=None, lazy="selectin")
+    side_effect: Mapped["SideEffect"] = relationship(
+        default=None,
+        lazy=None,
+    )
 
     items: Mapped[list["Item"]] = relationship(
         back_populates="location",
         default_factory=list,
+        lazy=None,
     )
+
     characters: Mapped[list["Character"]] = relationship(
         back_populates="location",
         default_factory=list,
+        lazy=None,
     )
 
     neighbour_locations: Mapped[list["Location"]] = relationship(
@@ -233,6 +257,7 @@ class Location(Entity, kw_only=True):
         secondaryjoin="Location.id==connected_locations.c.neighbour_id",
         back_populates="neighbour_locations",
         default_factory=list,
+        lazy=None,
     )
 
     def __repr__(self):
@@ -358,58 +383,108 @@ class Quest(Entity, kw_only=True):
 
     side_effect: Mapped["SideEffect"] = relationship(
         default=None,
-        lazy="selectin",
+        lazy=None,
     )
 
     npc: Mapped["NPC"] = relationship(
         back_populates="quests",
         foreign_keys=[npc_id],
         default=None,
+        lazy=None,
     )
     reward: Mapped[Optional["Item"]] = relationship(
         foreign_keys="[Item.reward_for_quest_id]",
         default=None,
+        lazy=None,
     )
+
     required_items: Mapped[list["Item"]] = relationship(
         back_populates="required_for_quest",
         foreign_keys="[Item.required_for_quest_id]",
         default_factory=list,
-    )
-    required_quests: Mapped[list["Quest"]] = relationship(
-        "Quest",
-        secondary="required_quests",
-        primaryjoin="Quest.id==required_quests.c.parent_quest_id",
-        secondaryjoin="Quest.id==required_quests.c.child_quest_id",
-        back_populates="required_quests",
-        default_factory=list,
-    )
-    required_npcs: Mapped[list["NPC"]] = relationship(
-        secondary="required_for_quest_npcs",
-        default_factory=list,
-    )
-    required_enemies: Mapped[list["Enemy"]] = relationship(
-        secondary="required_for_quest_enemies",
-        default_factory=list,
+        lazy=None,
     )
 
-    async def look_up():
+    prerequisite_quests: Mapped[list["Quest"]] = relationship(
+        "Quest",
+        secondary="prerequisite_quests_table",
+        primaryjoin="Quest.id==prerequisite_quests_table.c.parent_quest_id",
+        secondaryjoin="Quest.id==prerequisite_quests_table.c.child_quest_id",
+        back_populates="prerequisite_quests",
+        default_factory=list,
+        lazy=None,
+    )
+
+    required_npcs: Mapped[list["NPC"]] = relationship(
+        secondary="required_npcs_table",
+        default_factory=list,
+        lazy=None,
+    )
+
+    required_enemies: Mapped[list["Enemy"]] = relationship(
+        secondary="required_enemies_table",
+        default_factory=list,
+        lazy=None,
+    )
+
+    # def __repr__(self):
+    #     quest = f"Квест\nНазвание: {self.name}\nОписание: {self.description}\nДля выполнения требуется:"
+    #     quest += "\nВраги: " + ", ".join(
+    #         [f"{enemy.name}" for enemy in self.required_enemies]
+    #     )
+    #     quest += "\nNPCs: " + ", ".join([f"{npc.name}" for npc in self.required_npcs])
+    #     quest += "\nПредметы: " + ", ".join(
+    #         [f"{item.name}" for item in self.required_items]
+    #     )
+    #     quest += "\nКвесты: " + ", ".join(
+    #         [f"{quest.name}" for quest in self.prerequisite_quests]
+    #     )
+    #     quest += f"\nНаграда: {self.reward}"
+
+    #     quest += f"\nЭффект: {self.side_effect}"
+    #     return quest
+
+    @staticmethod
+    async def get_full_quest_info(quest_id: int) -> "Quest":
+        async with create_session() as session:
+            query = (
+                select(Quest)
+                .options(
+                    selectinload(Quest.required_enemies).selectin_polymorphic(
+                        [NPC, Enemy]
+                    )
+                )
+                .options(
+                    selectinload(Quest.required_npcs).selectin_polymorphic([NPC, Enemy])
+                )
+                .options(joinedload(Quest.required_items))
+                # .options(joinedload(Quest.prerequisite_quests))
+                .options(selectinload(Quest.reward))
+                .where(Quest.id == quest_id)
+            )
+
+            quest = await session.scalar(query)
+            return quest
+
+    async def is_available(quest_id: int):
+        """Проверить можно ли взять квест"""
         pass
 
 
-required_quests = Table(
-    "required_quests",
+prerequisite_quests = Table(
+    "prerequisite_quests_table",
     Base.metadata,
     Column("parent_quest_id", ForeignKey("quests.id"), primary_key=True),
     Column("child_quest_id", ForeignKey("quests.id"), primary_key=True),
 )
-required_for_quest_npcs = Table(
-    "required_for_quest_npcs",
+required_npcs_table = Table(
+    "required_npcs_table",
     Base.metadata,
     Column("quest_id", ForeignKey("quests.id"), primary_key=True),
     Column("npc_id", ForeignKey("npcs.id"), primary_key=True),
 )
-required_for_quest_enemies = Table(
-    "required_for_quest_enemies",
+required_enemies_table = Table(
+    "required_enemies_table",
     Base.metadata,
     Column("quest_id", ForeignKey("quests.id"), primary_key=True),
     Column("enemy_id", ForeignKey("enemies.id"), primary_key=True),
@@ -422,29 +497,51 @@ class Item(Entity, kw_only=True):
     __tablename__ = "items"
 
     side_effect_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("side_effects.id"), nullable=True, init=False
+        ForeignKey("side_effects.id"),
+        nullable=True,
+        init=False,
     )
     enemy_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("enemies.id"), nullable=True, init=False
+        ForeignKey("enemies.id"),
+        nullable=True,
+        init=False,
     )
     reward_for_quest_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("quests.id"), nullable=True, init=False
+        ForeignKey("quests.id"),
+        nullable=True,
+        init=False,
     )
     location_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("locations.id"), nullable=True, init=False
+        ForeignKey("locations.id"),
+        nullable=True,
+        init=False,
     )
     required_for_quest_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("quests.id"), nullable=True, init=False
+        ForeignKey("quests.id"),
+        nullable=True,
+        init=False,
     )
 
-    side_effect: Mapped["SideEffect"] = relationship(default=None, lazy="selectin")
-    enemy: Mapped["Enemy"] = relationship(back_populates="items", default=None)
-    location: Mapped["Location"] = relationship(back_populates="items", default=None)
+    side_effect: Mapped["SideEffect"] = relationship(
+        default=None,
+        lazy=None,
+    )
+    enemy: Mapped["Enemy"] = relationship(
+        back_populates="items",
+        default=None,
+        lazy=None,
+    )
+    location: Mapped["Location"] = relationship(
+        back_populates="items",
+        default=None,
+        lazy=None,
+    )
 
     required_for_quest: Mapped["Quest"] = relationship(
         back_populates="required_items",
         foreign_keys=required_for_quest_id,
         default=None,
+        lazy=None,
     )
 
     __table_args__ = (
@@ -454,9 +551,9 @@ class Item(Entity, kw_only=True):
         ),
     )
 
-    def apply_side_effect(self, *, character: Union["Protagonist", "Enemy"]) -> None:
-        if self.side_effect:
-            self.side_effect.apply(character)
+    # def apply_side_effect(self, *, character: Union["Protagonist", "Enemy"]) -> None:
+    #     if self.side_effect:
+    #         self.side_effect.apply(character)
 
 
 # Изменяемые таблицы

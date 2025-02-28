@@ -26,13 +26,21 @@ def create_side_effects() -> list[SideEffect]:
             description="За выполение побочного квеста +50 к опыту",
             xp_change=50,
         ),
-        SideEffect(name="+5 к силе", description="+5 к силе", strength_change=5),
-        SideEffect(name="+5 к силе", description="+5 к здоровью", hp_change=5),
         SideEffect(
             name="Атмосфера в регистраутре",
             description="Атмосфера отчаяния в регистраутре подействовала на вас",
             hp_change=-1,
             strength_change=-1,
+        ),
+        SideEffect(
+            name="Эффект сигарет здоровья",
+            description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будуте здоровыми :р",
+            hp_change=5,
+        ),
+        SideEffect(
+            name="Эффект пончика диабета",
+            description="+ 1 к силе",
+            strength_change=1,
         ),
     ]
 
@@ -44,12 +52,19 @@ def create_items(*, side_effects: list[SideEffect]) -> list[Item]:
         Item(
             name="Бутреброд",
             description="Это же бутерброд!",
+        ),
+        Item(
+            name="Жвачка",
+            description="Чтобы из-за рта не пахло сигами.",
+        ),
+        Item(
+            name="Пончик диабета",
+            description="Пончик диабета! сахар +100, сила +1",
             side_effect=side_effects[3],
         ),
         Item(
-            name="Пончик",
-            description="Это же пончик!",
-            side_effect=side_effects[2],
+            name="Сигареты",
+            description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будуте здоровыми :р Всем советую!",
         ),
     )
     return items
@@ -119,6 +134,17 @@ def create_enemies(*, items: list[Item]) -> list[Enemy]:
             items=[items[0]],
             phrases=[Phrase(phrase="Дурак!"), Phrase(phrase="Дебил!")],
         ),
+        Enemy(
+            name="Типичная яжмамка",
+            description="Пришла со своим мелким дебилом и орет на всю больницу",
+            start_phrase="Ну я же мать",
+            end_phrase="Ну я же мать!",
+            hp=12,
+            strength=10,
+            xp=5,
+            items=[items[3]],
+            phrases=[Phrase(phrase="Дебил!"), Phrase(phrase="Дурак!")],
+        ),
     ]
     return enemies
 
@@ -140,13 +166,13 @@ def create_locations(
         Location(
             name="Кабинет терапевта",
             description="Это начало начал",
-            items=[items[1]],
+            items=[items[1], items[2]],
             characters=[npcs[1]],
         ),
         Location(
             name="Кабинет окулиста",
             description="Тут зрение проверяют",
-            characters=[npcs[2]],
+            characters=[npcs[2], enemies[1]],
         ),
     ]
     locations[0].neighbour_locations.append(locations[1])
