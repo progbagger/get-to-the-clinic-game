@@ -1,5 +1,5 @@
 import asyncio
-from get_to_the_clinic_game.orm.database import db_manager
+from get_to_the_clinic_game.orm.database import DatabaseManager
 from get_to_the_clinic_game.orm import (
     Item,
     SideEffect,
@@ -181,6 +181,7 @@ def create_locations(
 
 
 async def main() -> None:
+    db_manager = DatabaseManager("sqlite+aiosqlite:///db.db")
 
     await db_manager.drop_tables()
     await db_manager.create_tables()

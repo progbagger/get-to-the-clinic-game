@@ -1,14 +1,19 @@
-from .orm import (
+from .models import (
     Base,
     Entity,
     Character,
     Enemy,
     NPC,
-    Protagonist,
     Phrase,
     Location,
+    connected_locations,
     SideEffect,
     Item,
     Quest,
     Status,
+    Protagonist,
+    ProtagonistItems,
+    ProtagonistQuest,
+    defeated_enemies,
+    apllied_side_effect,
 )
