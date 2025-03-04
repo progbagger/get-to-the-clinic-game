@@ -611,10 +611,42 @@ class Protagonist(HpStrengthMixin, BaseCharacter, kw_only=True):
         "polymorphic_identity": "protagonist",
     }
 
-    # async def whereami(self) -> Location:
-    #     """Получить получить строку описания локации, на которой находиться протагонист, с находящимися там персонажами, предметами"""
-    #     location = await Location.get_location_by_id(self.location_id, self)
-    #     return location
+    @staticmethod
+    async def get_protagonist_info(protagonist_id: int) -> "Protagonist":
+        """Получить текущие характеристики протагониста и его локацию по его id"""
+
+        async with db_manager.get_session() as session:
+            query = (
+                select(Protagonist)
+                .options(selectinload(Protagonist.location))
+                .where(Protagonist.id == protagonist_id)
+            )
+            protoganist = await session.scalar(query)
+            return protoganist
+
+    @staticmethod
+    async def get_protagonist_items(protagonist_id: int, used: bool = False) -> list[Item]:
+        async with db_manager.get_session() as session:
+            query = (
+                select(Item)
+                .options(joinedload(ProtagonistItems))
+                .where(ProtagonistItems.protagonist_id == protagonist_id)
+                .where(ProtagonistItems.used is used)
+            )
+            quests = await session.scalar(query)
+            return quests
+
+    @staticmethod
+    async def get_protagonist_quests(protagonist_id: int, status: Status = Status.InProgress) -> list[Quest]:
+        async with db_manager.get_session() as session:
+            query = (
+                select(Quest)
+                .options(joinedload(ProtagonistQuest))
+                .where(ProtagonistQuest.protagonist_id == protagonist_id)
+                .where(ProtagonistQuest.status == status)
+            )
+            quests = await session.scalar(query)
+            return quests
 
     # async def go(self, location_id: int) -> None:
     #     async with db_manager.get_session() as session:
