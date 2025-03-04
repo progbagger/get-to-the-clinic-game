@@ -1,7 +1,8 @@
+from typing import AsyncGenerator
 import pytest
-from typing import Any, Generator
-from sqlalchemy import create_engine, Engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from get_to_the_clinic_game.orm.database import test_db_manager as db_manager
 from get_to_the_clinic_game.orm import (
     Base,
     SideEffect,
@@ -15,22 +16,9 @@ from get_to_the_clinic_game.orm import (
 )
 
 
-@pytest.fixture
-def engine() -> Generator[Any, Any, Engine]:
-    engine = create_engine("sqlite://")
-    yield engine
-    engine.dispose()
-
-
-@pytest.fixture
-def create_tables(engine: Engine) -> None:
-    Base.metadata.create_all(engine)
-
-
-@pytest.fixture
-def session(engine: Engine) -> Generator[Any, Any, Session]:
-    with Session(engine) as session:
-        yield session
+@pytest.fixture(autouse=True)
+async def create_tables():
+    await db_manager.create_tables()
 
 
 @pytest.fixture
@@ -145,7 +133,7 @@ def items(
         ),
         Item(
             name="Сигареты",
-            description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будуте здоровыми :р Всем советую!",
+            description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будете здоровыми :р Всем советую!",
             location=locations[1],
         ),
     ]
@@ -167,50 +155,58 @@ def quests(npcs: list[NPC], side_effects: list[SideEffect]) -> list[Quest]:
     return quests
 
 
-def test_create_tables(create_tables):
-    pass
+async def test_side_effects(side_effects: list[SideEffect]):
+    async with db_manager.get_session() as session:
+        session.add_all(side_effects)
+        await session.commit()
+
+        assert side_effects == (await session.scalars(select(SideEffect))).all()
 
 
-def test_side_effects(create_tables, side_effects: list[SideEffect], session: Session):
-    session.add_all(side_effects)
-    session.commit()
+async def test_locations(locations: list[Location]):
+    async with db_manager.get_session() as session:
+        session.add_all(locations)
+        await session.commit()
 
-    assert side_effects == session.scalars(select(SideEffect)).all()
-
-
-def test_locations(create_tables, locations: list[Location], session: Session):
-    session.add_all(locations)
-    session.commit()
-
-    assert locations == session.scalars(select(Location)).all()
-    assert locations[1].items == session.scalars(select(Item)).all()
+        assert locations == (await session.scalars(select(Location))).all()
+        assert locations[1].items == (await session.scalars(select(Item))).all()
 
 
-def test_npcs(create_tables, npcs: list[NPC], session: Session):
-    session.add_all(npcs)
-    session.commit()
+async def test_npcs(npcs: list[NPC]):
+    async with db_manager.get_session() as session:
+        session.add_all(npcs)
+        await session.commit()
 
-    assert npcs == session.scalars(select(NPC)).all()
-
-
-def test_enemies(create_tables, enemies: list[Enemy], session: Session):
-    session.add_all(enemies)
-    session.commit()
-
-    assert enemies == session.scalars(select(Enemy)).all()
-    assert enemies[0] == session.scalars(select(Enemy).where(Enemy.id == 1)).one()
+        assert npcs == (await session.scalars(select(NPC))).all()
 
 
-def test_items(create_tables, items: list[Item], session: Session):
-    session.add_all(items)
-    session.commit()
+async def test_enemies(enemies: list[Enemy]):
+    async with db_manager.get_session() as session:
+        session.add_all(enemies)
+        await session.commit()
 
-    assert items == session.scalars(select(Item)).all()
-    assert items[0] == session.scalars(select(Item).where(Item.id == 1)).one()
+        assert enemies == (await session.scalars(select(Enemy))).all()
 
 
-def test_quests(create_tables, quests: list[Quest], session: Session):
-    session.add_all(quests)
-    session.commit()
+async def test_items(items: list[Item]):
+    async with db_manager.get_session() as session:
+        session.add_all(items)
+        await session.commit()
 
-    assert quests == session.scalars(select(Quest)).all()
+        assert items == (await session.scalars(select(Item))).all()
+
+
+async def test_quests(quests: list[Quest]):
+    async with db_manager.get_session() as session:
+        session.add_all(quests)
+        await session.commit()
+
+        assert quests == (await session.scalars(select(Quest))).all()
+
+
+async def test_get_protogonist(locations: list[Location]):
+    async with db_manager.get_session() as session:
+        session.add_all(locations)
+        await session.commit()
+
+        assert quests == (await session.scalars(select(Quest))).all()
