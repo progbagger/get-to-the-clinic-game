@@ -1,12 +1,13 @@
-from typing import AsyncGenerator
 import pytest
+from typing import AsyncGenerator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from get_to_the_clinic_game.orm.database import test_db_manager as db_manager
+from get_to_the_clinic_game.orm.database import DatabaseManager
 from get_to_the_clinic_game.orm import (
     Base,
     SideEffect,
     Location,
+    Character,
     NPC,
     Enemy,
     Protagonist,
@@ -15,14 +16,25 @@ from get_to_the_clinic_game.orm import (
     Quest,
 )
 
+from get_to_the_clinic_game.services import (
+    ProtagonistService,
+    LocationService,
+    CharacterService,
+    QuestService,
+    ItemService,
+)
+
 
 @pytest.fixture(autouse=True)
-async def create_tables():
-    await db_manager.create_tables()
+async def session() -> AsyncGenerator[AsyncSession, None]:
+    database = DatabaseManager("sqlite+aiosqlite:///:memory:")
+    await database.create_tables()
+    async with database.get_session() as s:
+        yield s
 
 
 @pytest.fixture
-def side_effects() -> list[SideEffect]:
+async def side_effects(session: AsyncSession) -> list[SideEffect]:
     side_effects = [
         SideEffect(
             name="Опыт за главный квест",
@@ -36,6 +48,12 @@ def side_effects() -> list[SideEffect]:
             strength_change=-1,
         ),
         SideEffect(
+            name="Атмосфера страха",
+            description="Атмосфера страха в коридоре, в ожидании неизбежного",
+            strength_change=-2,
+            xp_change=-3,
+        ),
+        SideEffect(
             name="Эффект сигарет здоровья",
             description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будуте здоровыми :р",
             hp_change=5,
@@ -46,28 +64,49 @@ def side_effects() -> list[SideEffect]:
             strength_change=1,
         ),
     ]
+    session.add_all(side_effects)
+    await session.commit()
 
     return side_effects
 
 
 @pytest.fixture
-def locations(side_effects: list[SideEffect]) -> list[Location]:
+async def locations(
+    side_effects: list[SideEffect], session: AsyncSession
+) -> list[Location]:
     locations = [
         Location(
             name="Регистратура",
-            description="Ваше первое испытание",
+            description="Ваша начальная локация",
             side_effect=side_effects[1],
         ),
         Location(
+            name="Коридор страха",
+            description="Бесконечный коридор, котррый ведет в ад.",
+            side_effect=side_effects[2],
+        ),
+        Location(
             name="Кабинет терапевта",
-            description="Это начало начал",
+            description="Тут все проверяют",
         ),
     ]
+    locations[0].id = 1
+    locations[1].id = 2
+    locations[2].id = 3
+
+    locations[0].neighbour_locations.append(locations[1])
+    locations[1].neighbour_locations.append(locations[0])
+    locations[1].neighbour_locations.append(locations[2])
+    locations[2].neighbour_locations.append(locations[1])
+
+    session.add_all(locations)
+    await session.commit()
+
     return locations
 
 
 @pytest.fixture
-def npcs(locations: list[Location]) -> list[NPC]:
+async def npcs(locations: list[Location], session: AsyncSession) -> list[NPC]:
     npcs = [
         NPC(
             name="Медсестра Иришка Чики-Пики",
@@ -82,18 +121,21 @@ def npcs(locations: list[Location]) -> list[NPC]:
             start_phrase="Здраствуйте, проходите. Вы на медосмотр?",
             end_phrase="Вот ваше список врачей которых нужно посетить!",
             xp=100,
-            location=locations[0],
+            location=locations[2],
         ),
     ]
+    session.add_all(npcs)
+    await session.commit()
+
     return npcs
 
 
 @pytest.fixture
-def enemies(locations: list[Location]) -> list[Location]:
+async def enemies(locations: list[Location], session: AsyncSession) -> list[Enemy]:
 
     enemies = [
         Enemy(
-            name="Какая-то бабка",
+            name="Баба Вера",
             description="Это ваш первый противник. Стоит в очереди и не дает вам пройти",
             start_phrase="Ты что сквозь очередь лезешь?",
             end_phrase="Ну и молодежь пошла!",
@@ -110,12 +152,18 @@ def enemies(locations: list[Location]) -> list[Location]:
         ),
     ]
 
+    session.add_all(enemies)
+    await session.commit()
+
     return enemies
 
 
 @pytest.fixture
-def items(
-    enemies: list[Enemy], locations: list[Location], side_effects: list[SideEffect]
+async def items(
+    enemies: list[Enemy],
+    locations: list[Location],
+    side_effects: list[SideEffect],
+    session: AsyncSession,
 ) -> list[Item]:
 
     items = [
@@ -132,17 +180,22 @@ def items(
             side_effect=side_effects[3],
         ),
         Item(
-            name="Сигареты",
+            name="Сигареты здоровья",
             description="Это великие сигареты здоровья! Курите каждый день по пачке в день и будете здоровыми :р Всем советую!",
             location=locations[1],
         ),
     ]
 
+    session.add_all(items)
+    await session.commit()
+
     return items
 
 
 @pytest.fixture
-def quests(npcs: list[NPC], side_effects: list[SideEffect]) -> list[Quest]:
+async def quests(
+    npcs: list[NPC], side_effects: list[SideEffect], session: AsyncSession
+) -> list[Quest]:
     quests = [
         Quest(
             name="Иди к терапевту",
@@ -152,61 +205,100 @@ def quests(npcs: list[NPC], side_effects: list[SideEffect]) -> list[Quest]:
             required_npcs=[npcs[1]],
         )
     ]
+    session.add_all(quests)
+    await session.commit()
+
     return quests
 
 
-async def test_side_effects(side_effects: list[SideEffect]):
-    async with db_manager.get_session() as session:
-        session.add_all(side_effects)
-        await session.commit()
+async def test_side_effects(side_effects: list[SideEffect], session: AsyncSession):
+    result = (await session.scalars(select(SideEffect))).all()
 
-        assert side_effects == (await session.scalars(select(SideEffect))).all()
+    assert side_effects == result
 
 
-async def test_locations(locations: list[Location]):
-    async with db_manager.get_session() as session:
-        session.add_all(locations)
-        await session.commit()
+async def test_locations(locations: list[Location], session: AsyncSession):
+    result = (await session.scalars(select(Location))).all()
 
-        assert locations == (await session.scalars(select(Location))).all()
-        assert locations[1].items == (await session.scalars(select(Item))).all()
+    assert locations == result
 
 
-async def test_npcs(npcs: list[NPC]):
-    async with db_manager.get_session() as session:
-        session.add_all(npcs)
-        await session.commit()
+@pytest.mark.parametrize("location_id", [1, 2, 3])
+async def test_get_neighbour_locations(
+    locations: list[Location], session: AsyncSession, location_id
+):
+    result = await LocationService.get_neighbour_locations(location_id)
 
-        assert npcs == (await session.scalars(select(NPC))).all()
-
-
-async def test_enemies(enemies: list[Enemy]):
-    async with db_manager.get_session() as session:
-        session.add_all(enemies)
-        await session.commit()
-
-        assert enemies == (await session.scalars(select(Enemy))).all()
+    assert sorted(
+        locations[location_id - 1].neighbour_locations, key=lambda x: x.id
+    ) == sorted(result, key=lambda x: x.id)
 
 
-async def test_items(items: list[Item]):
-    async with db_manager.get_session() as session:
-        session.add_all(items)
-        await session.commit()
+@pytest.mark.parametrize("location_id", [1, 2, 3])
+async def test_get_characters_by_location(
+    locations: list[Location],
+    npcs: list[NPC],
+    enemies: list[Enemy],
+    session: AsyncSession,
+    location_id: list[int],
+):
 
-        assert items == (await session.scalars(select(Item))).all()
+    result = await LocationService.get_characters_by_location(location_id, 1)
 
-
-async def test_quests(quests: list[Quest]):
-    async with db_manager.get_session() as session:
-        session.add_all(quests)
-        await session.commit()
-
-        assert quests == (await session.scalars(select(Quest))).all()
+    assert locations[location_id - 1].characters == result
 
 
-async def test_get_protogonist(locations: list[Location]):
-    async with db_manager.get_session() as session:
-        session.add_all(locations)
-        await session.commit()
+@pytest.mark.parametrize("location_id", [1, 2, 3])
+async def test_get_items_by_location(
+    locations: list[Location],
+    items: list[Item],
+    session: AsyncSession,
+    location_id: list[int],
+):
+    result = await LocationService.get_items_by_location(location_id, 1)
 
-        assert quests == (await session.scalars(select(Quest))).all()
+    assert locations[location_id - 1].items == result
+
+
+@pytest.mark.parametrize("location_id", [1, 2, 3])
+async def test_get_location_detail(
+    locations: list[Location],
+    npcs: list[NPC],
+    enemies: list[Enemy],
+    items: list[Item],
+    session: AsyncSession,
+    location_id: list[int],
+):
+    result = await LocationService.get_location_details(location_id, 1)
+
+    assert locations[location_id - 1] == result
+
+
+async def test_npcs(npcs: list[NPC], session: AsyncSession):
+    result = (await session.scalars(select(NPC))).all()
+
+    assert npcs == result
+
+
+async def test_enemies(enemies: list[Enemy], session: AsyncSession):
+    result = (await session.scalars(select(Enemy))).all()
+
+    assert enemies == result
+
+
+async def test_items(items: list[Item], session: AsyncSession):
+    result = (await session.scalars(select(Item))).all()
+
+    assert items == result
+
+
+async def test_quests(quests: list[Quest], session: AsyncSession):
+    result = (await session.scalars(select(Quest))).all()
+
+    assert quests == result
+
+
+# async def test_get_protogonist(locations: list[Location], session: AsyncSession):
+
+#     session.add_all(locations)
+#     await session.commit()
