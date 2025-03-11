@@ -16,4 +16,5 @@ from .models import (
     ProtagonistQuest,
     defeated_enemies,
     apllied_side_effect,
+    prerequisite_quests,
 )

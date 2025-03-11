@@ -16,6 +16,7 @@ from get_to_the_clinic_game.orm import (
     Quest,
     Status,
     defeated_enemies,
+    prerequisite_quests,
 )
 
 session: AsyncSession | None = None
@@ -155,7 +156,7 @@ class QuestService:
                 selectinload(Quest.required_npcs).selectin_polymorphic([NPC, Enemy])
             )
             .options(joinedload(Quest.required_items))
-            # .options(joinedload(Quest.prerequisite_quests))
+            .options(joinedload(Quest.prerequisite_quests))
             .options(selectinload(Quest.reward))
             .where(Quest.id == quest_id)
         )
@@ -163,9 +164,37 @@ class QuestService:
         quest = await session.scalar(query)
         return quest
 
-    async def is_available(quest_id: int):
+    async def is_quest_available(quest_id: int, protogonist_id: int) -> bool:
         """Проверить можно ли взять квест"""
-        pass
+
+        prerequisite_quests_ids = set(
+            (
+                await session.scalars(
+                    select(Quest.id)
+                    .join(
+                        prerequisite_quests,
+                        Quest.id == prerequisite_quests.c.required_quest_id,
+                    )
+                    .where(prerequisite_quests.c.quest_id == quest_id)
+                )
+            ).all()
+        )
+
+        if not prerequisite_quests_ids:
+            return True
+
+        completed_protogonist_quests_ids = set(
+            (
+                await session.execute(
+                    select(ProtagonistQuest.quest_id).where(
+                        ProtagonistQuest.protagonist_id == protogonist_id
+                        and ProtagonistQuest.status == Status.Completed
+                    )
+                )
+            ).all()
+        )
+
+        return prerequisite_quests_ids.issubset(completed_protogonist_quests_ids)
 
 
 class ItemService:
@@ -255,26 +284,23 @@ class ProtagonistService:
     @staticmethod
     async def go(protagonist_id: int, location_id: int) -> None:
 
-        query = (
+        protagonist_query = (
             select(Protagonist)
             .outerjoin(Protagonist.location)
             .outerjoin(Location.side_effect)
             .where(Protagonist.id == protagonist_id)
         )
 
-        protagonist = await session.scalar(query)
-        print(protagonist)
+        protagonist = await session.scalar(protagonist_query)
 
-        if protagonist.location.side_effect is not None:
+        if not protagonist.location.side_effect:
             protagonist.location.side_effect.cancel(protagonist)
 
         protagonist.location_id = location_id
 
         await session.commit()
-        await session.refresh(protagonist)
-        print(protagonist.location.side_effect)
 
-        if protagonist.location.side_effect is not None:
+        if not protagonist.location.side_effect:
             protagonist.location.side_effect.apply(protagonist)
         await session.commit()
 

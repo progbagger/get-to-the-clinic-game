@@ -198,17 +198,35 @@ async def quests(
 ) -> list[Quest]:
     quests = [
         Quest(
+            name="Поговори с медсестрой в регистратуре",
+            description="Тебе нужно узнать как проходить собес в яндекс",
+            side_effect=side_effects[0],
+            required_npcs=[npcs[0]],
+        ),
+        Quest(
             name="Иди к терапевту",
             description="Терапевт даст направление с врачами, которые тебе нужно посетить",
             side_effect=side_effects[0],
             npc=npcs[0],
             required_npcs=[npcs[1]],
-        )
+        ),
     ]
+    quests[1].prerequisite_quests.append(quests[0])
+
     session.add_all(quests)
     await session.commit()
 
     return quests
+
+
+@pytest.fixture
+async def protagonist():
+    protagonist_id = 1
+    await ProtagonistService.create_protagonist(protagonist_id, "aboba")
+
+    protagonist = await ProtagonistService.get_protagonist_details(protagonist_id)
+
+    return protagonist
 
 
 async def test_side_effects(side_effects: list[SideEffect], session: AsyncSession):
@@ -225,7 +243,7 @@ async def test_locations(locations: list[Location], session: AsyncSession):
 
 @pytest.mark.parametrize("location_id", [1, 2, 3])
 async def test_get_neighbour_locations(
-    locations: list[Location], session: AsyncSession, location_id
+    locations: list[Location], session: AsyncSession, location_id: int
 ):
     result = await LocationService.get_neighbour_locations(location_id)
 
@@ -240,7 +258,7 @@ async def test_get_characters_by_location(
     npcs: list[NPC],
     enemies: list[Enemy],
     session: AsyncSession,
-    location_id: list[int],
+    location_id: int,
 ):
 
     result = await LocationService.get_characters_by_location(location_id, 1)
@@ -253,7 +271,7 @@ async def test_get_items_by_location(
     locations: list[Location],
     items: list[Item],
     session: AsyncSession,
-    location_id: list[int],
+    location_id: int,
 ):
     result = await LocationService.get_items_by_location(location_id, 1)
 
@@ -267,7 +285,7 @@ async def test_get_location_detail(
     enemies: list[Enemy],
     items: list[Item],
     session: AsyncSession,
-    location_id: list[int],
+    location_id: int,
 ):
     result = await LocationService.get_location_details(location_id, 1)
 
@@ -286,6 +304,30 @@ async def test_enemies(enemies: list[Enemy], session: AsyncSession):
     assert enemies == result
 
 
+@pytest.mark.parametrize("character_id", [1, 2])
+async def test_get_character_detail_npc(
+    npcs: list[NPC], session: AsyncSession, character_id: int
+):
+    result = await CharacterService.get_character_details(character_id)
+
+    assert npcs[character_id - 1] == result
+
+    for i in range(len(result.quests)):
+        assert npcs.quests[i] == result.quests[i]
+
+
+@pytest.mark.parametrize("character_id", [1, 2])
+async def test_get_character_detail_enemy(
+    enemies: list[Enemy], session: AsyncSession, character_id: int
+):
+    result = await CharacterService.get_character_details(character_id)
+
+    assert enemies[character_id - 1] == result
+
+    for i in range(len(result.items)):
+        assert enemies.items[i] == result.items[i]
+
+
 async def test_items(items: list[Item], session: AsyncSession):
     result = (await session.scalars(select(Item))).all()
 
@@ -296,6 +338,25 @@ async def test_quests(quests: list[Quest], session: AsyncSession):
     result = (await session.scalars(select(Quest))).all()
 
     assert quests == result
+
+
+@pytest.mark.parametrize("quest_id", [1, 2])
+async def test_get_quest_detail(
+    quests: list[Quest], session: AsyncSession, quest_id: int
+):
+    result = await QuestService.get_quest_details(quest_id)
+
+    assert quests[quest_id - 1] == result
+
+
+@pytest.mark.parametrize("quest_id,expected", [(1, True), (2, False)])
+async def test_is_quest_available(
+    quests: list[Quest], protagonist: Protagonist, quest_id: int, expected: bool
+):
+
+    result: bool = await QuestService.is_quest_available(quest_id, protagonist.id)
+
+    assert expected == result
 
 
 # async def test_get_protogonist(locations: list[Location], session: AsyncSession):

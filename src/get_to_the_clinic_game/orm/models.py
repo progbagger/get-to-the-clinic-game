@@ -268,8 +268,8 @@ class Quest(Entity, kw_only=True):
     prerequisite_quests: Mapped[list["Quest"]] = relationship(
         "Quest",
         secondary="prerequisite_quests_table",
-        primaryjoin="Quest.id==prerequisite_quests_table.c.parent_quest_id",
-        secondaryjoin="Quest.id==prerequisite_quests_table.c.child_quest_id",
+        primaryjoin="Quest.id==prerequisite_quests_table.c.quest_id",
+        secondaryjoin="Quest.id==prerequisite_quests_table.c.required_quest_id",
         back_populates="prerequisite_quests",
         default_factory=list,
         lazy=None,
@@ -296,7 +296,7 @@ class Quest(Entity, kw_only=True):
     #     quest += "\nПредметы: " + ", ".join(
     #         [f"{item.name}" for item in self.required_items]
     #     )
-    #     quest += "\nКвесты: " + ", ".join(
+    #     quest += "\nДля открытия нужны квесты: " + ", ".join(
     #         [f"{quest.name}" for quest in self.prerequisite_quests]
     #     )
     #     quest += f"\nНаграда: {self.reward}"
@@ -308,8 +308,8 @@ class Quest(Entity, kw_only=True):
 prerequisite_quests = Table(
     "prerequisite_quests_table",
     Base.metadata,
-    Column("parent_quest_id", ForeignKey("quests.id"), primary_key=True),
-    Column("child_quest_id", ForeignKey("quests.id"), primary_key=True),
+    Column("quest_id", ForeignKey("quests.id"), primary_key=True),
+    Column("required_quest_id", ForeignKey("quests.id"), primary_key=True),
 )
 required_npcs_table = Table(
     "required_npcs_table",
